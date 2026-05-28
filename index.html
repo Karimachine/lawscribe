@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LawScribe — AI Legal Documents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1714;
+    --paper: #f7f4ef;
+    --cream: #ede9e0;
+    --gold: #b8860b;
+    --gold-light: #d4a843;
+    --muted: #6b6560;
+    --border: rgba(26,23,20,0.12);
+    --card-bg: #ffffff;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 3rem;
+    height: 64px;
+    background: rgba(247,244,239,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .nav-logo {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 1.2rem;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--gold); }
+  .nav-links { display: flex; gap: 2rem; align-items: center; }
+  .nav-links a {
+    font-size: 0.88rem;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 0.01em;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta {
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.85rem !important;
+    font-weight: 500;
+    transition: opacity 0.2s !important;
+  }
+  .nav-cta:hover { opacity: 0.85 !important; }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 6rem 2rem 4rem;
+    position: relative;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(184,134,11,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    border: 0.5px solid rgba(184,134,11,0.4);
+    background: rgba(184,134,11,0.06);
+    color: var(--gold);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.9rem;
+    border-radius: 100px;
+    margin-bottom: 2rem;
+    animation: fadeUp 0.6s ease both;
+  }
+  .hero-badge::before { content: '●'; font-size: 0.5rem; }
+
+  h1 {
+    font-family: 'Libre Baskerville', serif;
+    font-size: clamp(2.6rem, 6vw, 5rem);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    max-width: 800px;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+  .hero-sub {
+    font-size: 1.1rem;
+    color: var(--muted);
+    max-width: 520px;
+    line-height: 1.7;
+    font-weight: 300;
+    margin-bottom: 2.5rem;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+  .hero-actions {
+    display: flex; gap: 1rem; align-items: center;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.85rem 2rem;
+    border-radius: 4px;
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: none; cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    letter-spacing: 0.01em;
+  }
+  .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn-secondary {
+    color: var(--ink);
+    padding: 0.85rem 1.5rem;
+    border-radius: 4px;
+    font-size: 0.92rem;
+    text-decoration: none;
+    border: 0.5px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .btn-secondary:hover { background: var(--cream); transform: translateY(-1px); }
+
+  /* SOCIAL PROOF */
+  .social-proof {
+    margin-top: 4rem;
+    display: flex; align-items: center; gap: 2rem;
+    opacity: 0.6;
+    font-size: 0.82rem;
+    color: var(--muted);
+    animation: fadeUp 0.6s 0.4s ease both;
+  }
+  .social-proof .divider { width: 1px; height: 20px; background: var(--border); }
+
+  /* DEMO PREVIEW */
+  .demo-wrap {
+    width: 100%; max-width: 900px;
+    margin: 4rem auto 0;
+    animation: fadeUp 0.8s 0.5s ease both;
+  }
+  .demo-card {
+    background: var(--card-bg);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(26,23,20,0.08), 0 4px 16px rgba(26,23,20,0.04);
+  }
+  .demo-bar {
+    background: var(--cream);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0.75rem 1rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .demo-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .demo-dot:nth-child(1) { background: #ff5f57; }
+  .demo-dot:nth-child(2) { background: #febc2e; }
+  .demo-dot:nth-child(3) { background: #28c840; }
+  .demo-inner {
+    display: grid; grid-template-columns: 240px 1fr;
+    min-height: 420px;
+  }
+  .demo-sidebar {
+    border-right: 0.5px solid var(--border);
+    padding: 1.5rem 1rem;
+    background: #faf9f7;
+  }
+  .demo-sidebar-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    padding: 0 0.5rem;
+  }
+  .doc-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+  .doc-item:hover { background: var(--cream); }
+  .doc-item.active {
+    background: var(--cream);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .doc-icon {
+    width: 18px; height: 18px;
+    background: rgba(184,134,11,0.15);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    color: var(--gold);
+    font-weight: 700;
+  }
+  .demo-main { padding: 2rem; }
+  .demo-prompt-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  .demo-prompt-box {
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    font-size: 0.88rem;
+    color: var(--ink);
+    background: var(--paper);
+    margin-bottom: 1.5rem;
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.5;
+  }
+  .demo-output {
+    border-left: 2px solid var(--gold-light);
+    padding-left: 1rem;
+  }
+  .demo-output-title {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .demo-output p {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 0.5rem;
+  }
+  .typing-cursor {
+    display: inline-block;
+    width: 2px; height: 13px;
+    background: var(--gold);
+    margin-left: 2px;
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+  }
+
+  /* DOCUMENT TYPES */
+  .section { padding: 6rem 2rem; }
+  .section-center { max-width: 1100px; margin: 0 auto; }
+  .section-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    margin-bottom: 1rem;
+    font-weight: 500;
+  }
+  h2 {
+    font-family: 'Libre Baskerville', serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .section-sub {
+    font-size: 1rem;
+    color: var(--muted);
+    max-width: 500px;
+    line-height: 1.7;
+    font-weight: 300;
+    margin-bottom: 3rem;
+  }
+
+  .doc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px;
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--border);
+  }
+  .doc-card {
+    background: var(--card-bg);
+    padding: 1.75rem 1.5rem;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+  .doc-card:hover { background: #fdfcfa; }
+  .doc-card-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: rgba(184,134,11,0.1);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  .doc-card h3 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .doc-card p {
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* HOW IT WORKS */
+  .steps-bg { background: var(--cream); }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2rem;
+  }
+  .step {
+    position: relative;
+  }
+  .step-num {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 2.5rem;
+    color: rgba(184,134,11,0.2);
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+  }
+  .step h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .step p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* PRICING */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .plan {
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    background: var(--card-bg);
+    transition: box-shadow 0.2s;
+  }
+  .plan:hover { box-shadow: 0 8px 32px rgba(26,23,20,0.06); }
+  .plan.featured {
+    border: 1.5px solid var(--gold-light);
+    position: relative;
+  }
+  .plan-badge {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--gold);
+    color: white;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.85rem;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+  .plan-name {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+  .plan-price {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 2.5rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.25rem;
+  }
+  .plan-price span { font-size: 1rem; font-family: 'DM Sans', sans-serif; color: var(--muted); }
+  .plan-desc { font-size: 0.83rem; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.5; }
+  .plan-divider { height: 0.5px; background: var(--border); margin-bottom: 1.25rem; }
+  .plan-feature {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    font-size: 0.83rem; color: var(--ink);
+    margin-bottom: 0.65rem; line-height: 1.4;
+  }
+  .plan-feature::before {
+    content: '✓';
+    color: var(--gold);
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .plan-btn {
+    display: block; width: 100%; text-align: center;
+    margin-top: 1.75rem;
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.2s, transform 0.15s;
+    border: 0.5px solid var(--border);
+    color: var(--ink);
+    background: transparent;
+  }
+  .plan.featured .plan-btn {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .plan-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+
+  /* TESTIMONIALS */
+  .testimonials-bg { background: var(--ink); color: var(--paper); }
+  .testimonials-bg .section-label { color: var(--gold-light); }
+  .testimonials-bg h2 { color: var(--paper); }
+  .testi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .testi-card {
+    border: 0.5px solid rgba(247,244,239,0.12);
+    border-radius: 12px;
+    padding: 1.75rem;
+    background: rgba(247,244,239,0.04);
+  }
+  .testi-stars { color: var(--gold-light); font-size: 0.85rem; margin-bottom: 1rem; }
+  .testi-text {
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: rgba(247,244,239,0.8);
+    font-style: italic;
+    font-family: 'Libre Baskerville', serif;
+    margin-bottom: 1.25rem;
+  }
+  .testi-author {
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .testi-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(184,134,11,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 500; color: var(--gold-light);
+  }
+  .testi-name { font-size: 0.83rem; font-weight: 500; }
+  .testi-role { font-size: 0.75rem; color: rgba(247,244,239,0.5); }
+
+  /* CTA */
+  .cta-section {
+    text-align: center;
+    padding: 7rem 2rem;
+    position: relative;
+  }
+  .cta-section::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(184,134,11,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .cta-section h2 { margin-bottom: 1rem; }
+  .cta-section p { font-size: 1rem; color: var(--muted); margin-bottom: 2.5rem; font-weight: 300; }
+
+  /* FOOTER */
+  footer {
+    border-top: 0.5px solid var(--border);
+    padding: 2.5rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .footer-logo {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 1rem;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .footer-logo span { color: var(--gold); }
+  .footer-links {
+    display: flex; gap: 1.5rem;
+  }
+  .footer-links a {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .footer-links a:hover { color: var(--ink); }
+  .footer-copy { font-size: 0.78rem; color: var(--muted); }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* INTERACTIVE DEMO */
+  #demo-section { scroll-margin-top: 80px; }
+  .generate-btn {
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 0.65rem 1.25rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 1rem;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .generate-btn:hover { opacity: 0.8; }
+  .generate-btn.loading { opacity: 0.6; cursor: default; }
+
+  @media (max-width: 640px) {
+    nav { padding: 0 1.25rem; }
+    .nav-links { display: none; }
+    .hero { padding: 5rem 1.25rem 3rem; }
+    .demo-inner { grid-template-columns: 1fr; }
+    .demo-sidebar { display: none; }
+    footer { flex-direction: column; text-align: center; }
+    .hero-actions { flex-direction: column; width: 100%; }
+    .btn-primary, .btn-secondary { width: 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo">Law<span>Scribe</span></a>
+  <div class="nav-links">
+    <a href="#documents">Documents</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#" class="nav-cta">Start free</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">AI-Powered Legal Drafting</div>
+  <h1>Legal documents,<br><em>written in minutes</em></h1>
+  <p class="hero-sub">Draft contracts, agreements, NDAs, and more with AI trained on thousands of legal templates. No lawyer required for everyday documents.</p>
+  <div class="hero-actions">
+    <a href="#demo-section" class="btn-primary">Generate a document →</a>
+    <a href="#how-it-works" class="btn-secondary">See how it works</a>
+  </div>
+  <div class="social-proof">
+    <span>Trusted by 12,000+ individuals & businesses</span>
+    <div class="divider"></div>
+    <span>★★★★★ 4.9 rating</span>
+    <div class="divider"></div>
+    <span>50+ document types</span>
+  </div>
+
+  <!-- LIVE DEMO PREVIEW -->
+  <div class="demo-wrap" id="demo-section">
+    <div class="demo-card">
+      <div class="demo-bar">
+        <div class="demo-dot"></div>
+        <div class="demo-dot"></div>
+        <div class="demo-dot"></div>
+      </div>
+      <div class="demo-inner">
+        <div class="demo-sidebar">
+          <div class="demo-sidebar-label">My Documents</div>
+          <div class="doc-item active">
+            <div class="doc-icon">NDA</div>
+            Non-Disclosure Agreement
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">SC</div>
+            Service Contract
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">LA</div>
+            Lease Agreement
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">PP</div>
+            Privacy Policy
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">EO</div>
+            Employment Offer
+          </div>
+          <div class="doc-item">
+            <div class="doc-icon">PA</div>
+            Partnership Agreement
+          </div>
+        </div>
+        <div class="demo-main">
+          <div class="demo-prompt-label">Your request</div>
+          <div class="demo-prompt-box" id="promptDisplay">
+            Draft a mutual NDA between Acme Corp and a freelance designer named Sarah Chen. Include a 2-year confidentiality period and cover all design assets and client lists.
+          </div>
+          <button class="generate-btn" id="generateBtn" onclick="generateDoc()">
+            <span id="btnText">✦ Generate document</span>
+          </button>
+          <div id="outputArea" style="display:none; margin-top:1.5rem;">
+            <div class="demo-output">
+              <div class="demo-output-title">MUTUAL NON-DISCLOSURE AGREEMENT</div>
+              <p id="generatedText"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCUMENTS SECTION -->
+<section class="section" id="documents">
+  <div class="section-center">
+    <div class="section-label">Document Library</div>
+    <h2>Every document<br>your business needs</h2>
+    <p class="section-sub">From simple NDAs to complex partnership agreements — generated, not just templated.</p>
+    <div class="doc-grid">
+      <div class="doc-card">
+        <div class="doc-card-icon">📋</div>
+        <h3>Non-Disclosure Agreements</h3>
+        <p>Mutual and one-way NDAs for any business relationship or contractor engagement.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">🤝</div>
+        <h3>Service Contracts</h3>
+        <p>Freelancer and vendor agreements with payment terms, deliverables, and IP clauses.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">🏠</div>
+        <h3>Lease Agreements</h3>
+        <p>Residential and commercial lease documents tailored to your state's requirements.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">⚖️</div>
+        <h3>Partnership Agreements</h3>
+        <p>Define equity splits, responsibilities, and decision-making for business partners.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">💼</div>
+        <h3>Employment Offers</h3>
+        <p>Professional offer letters with compensation, benefits, and at-will clauses.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">🔐</div>
+        <h3>Privacy Policies</h3>
+        <p>GDPR and CCPA-compliant privacy policies for websites and mobile apps.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">💰</div>
+        <h3>Loan Agreements</h3>
+        <p>Personal and business loan documents with repayment schedules and interest terms.</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-card-icon">📜</div>
+        <h3>Terms of Service</h3>
+        <p>Website and app terms that protect your business and set clear user expectations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section steps-bg" id="how-it-works">
+  <div class="section-center">
+    <div class="section-label">Process</div>
+    <h2>Three steps to<br>a signed document</h2>
+    <p class="section-sub">From blank page to legally sound document in under five minutes.</p>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Describe your situation</h3>
+        <p>Tell us in plain English what you need. Mention the parties involved, key terms, and any specific requirements.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>AI drafts your document</h3>
+        <p>Our model generates a complete, jurisdiction-aware document with proper legal language and all standard clauses.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Edit, export & sign</h3>
+        <p>Review and refine inline, then download as PDF or Word. Send for e-signature directly from LawScribe.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section testimonials-bg">
+  <div class="section-center">
+    <div class="section-label">Testimonials</div>
+    <h2>Trusted by founders,<br>freelancers & families</h2>
+    <p class="section-sub" style="color: rgba(247,244,239,0.6); margin-bottom: 3rem;">Real people using LawScribe for real documents.</p>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Generated a contractor NDA in under two minutes. My lawyer would have charged $400 for the same thing."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">MK</div>
+          <div>
+            <div class="testi-name">Marcus Kim</div>
+            <div class="testi-role">Founder, Wavefront Studio</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"The lease agreement it drafted for my rental property was thorough and state-specific. Genuinely impressive."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">RL</div>
+          <div>
+            <div class="testi-name">Rachel Liu</div>
+            <div class="testi-role">Property owner, Austin TX</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"As a freelancer, I used to just hope for the best with clients. Now I have proper contracts for every project."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">JP</div>
+          <div>
+            <div class="testi-name">James Patel</div>
+            <div class="testi-role">Independent designer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <div class="section-center" style="text-align: center;">
+    <div class="section-label">Pricing</div>
+    <h2>Simple, honest pricing</h2>
+    <p class="section-sub" style="margin: 0 auto 3rem;">No hidden fees. Cancel anytime.</p>
+    <div class="pricing-grid">
+      <div class="plan">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price">Free</div>
+        <div class="plan-desc">For individuals with occasional document needs.</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">3 documents per month</div>
+        <div class="plan-feature">PDF export</div>
+        <div class="plan-feature">10 document types</div>
+        <div class="plan-feature">Basic editing tools</div>
+        <a href="#" class="plan-btn">Get started free</a>
+      </div>
+      <div class="plan featured">
+        <div class="plan-badge">Most popular</div>
+        <div class="plan-name">Professional</div>
+        <div class="plan-price">$19 <span>/ mo</span></div>
+        <div class="plan-desc">For freelancers and small businesses drafting regularly.</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">Unlimited documents</div>
+        <div class="plan-feature">PDF & Word export</div>
+        <div class="plan-feature">All 50+ document types</div>
+        <div class="plan-feature">E-signature (5 per month)</div>
+        <div class="plan-feature">Document history & versioning</div>
+        <a href="#" class="plan-btn">Start 7-day free trial</a>
+      </div>
+      <div class="plan">
+        <div class="plan-name">Business</div>
+        <div class="plan-price">$59 <span>/ mo</span></div>
+        <div class="plan-desc">For teams and businesses with high-volume needs.</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">Everything in Professional</div>
+        <div class="plan-feature">Unlimited e-signatures</div>
+        <div class="plan-feature">Team collaboration</div>
+        <div class="plan-feature">Custom clause library</div>
+        <div class="plan-feature">Priority support</div>
+        <a href="#" class="plan-btn">Start 7-day free trial</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-label" style="margin-bottom: 1.5rem;">Get started today</div>
+  <h2>Your first document<br>is on us</h2>
+  <p>No credit card required. No legal jargon. Just documents that work.</p>
+  <a href="#" class="btn-primary" style="display: inline-block;">Generate your first document →</a>
+</section>
+
+<footer>
+  <a href="#" class="footer-logo">Law<span>Scribe</span></a>
+  <div class="footer-links">
+    <a href="#">Privacy</a>
+    <a href="#">Terms</a>
+    <a href="#">Help</a>
+    <a href="#">Contact</a>
+  </div>
+  <div class="footer-copy">© 2026 LawScribe. Not a law firm.</div>
+</footer>
+
+<script>
+const outputs = [
+  `This Mutual Non-Disclosure Agreement ("Agreement") is entered into as of the date last signed below, by and between Acme Corp, a corporation ("Disclosing Party"), and Sarah Chen, a freelance designer ("Receiving Party").\n\n1. CONFIDENTIAL INFORMATION. Each party may disclose to the other certain proprietary information including but not limited to design assets, client lists, business strategies, and technical data ("Confidential Information").\n\n2. OBLIGATIONS. Each party agrees to hold the other's Confidential Information in strict confidence for a period of two (2) years from the date of disclosure...`,
+];
+
+let typingInterval = null;
+
+function generateDoc() {
+  const btn = document.getElementById('generateBtn');
+  const btnText = document.getElementById('btnText');
+  const outputArea = document.getElementById('outputArea');
+  const generatedText = document.getElementById('generatedText');
+
+  if (btn.classList.contains('loading')) return;
+
+  btn.classList.add('loading');
+  btnText.textContent = '✦ Generating...';
+  outputArea.style.display = 'none';
+  generatedText.textContent = '';
+
+  if (typingInterval) clearInterval(typingInterval);
+
+  setTimeout(() => {
+    outputArea.style.display = 'block';
+    const text = outputs[0];
+    let i = 0;
+    typingInterval = setInterval(() => {
+      if (i < text.length) {
+        generatedText.textContent += text[i];
+        i++;
+      } else {
+        clearInterval(typingInterval);
+        btn.classList.remove('loading');
+        btnText.textContent = '✦ Regenerate';
+      }
+    }, 12);
+  }, 800);
+}
+
+// Sidebar doc switching
+document.querySelectorAll('.doc-item').forEach((item, index) => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.doc-item').forEach(d => d.classList.remove('active'));
+    item.classList.add('active');
+    const prompts = [
+      'Draft a mutual NDA between Acme Corp and a freelance designer named Sarah Chen. Include a 2-year confidentiality period and cover all design assets and client lists.',
+      'Create a service contract for a web development project worth $8,000, with milestone payments, a 30-day revision period, and IP transfer upon final payment.',
+      'Generate a residential lease agreement for a 1BR apartment in Austin, TX at $1,650/month, 12-month term, no pets, utilities excluded.',
+      'Write a GDPR-compliant privacy policy for a SaaS product that collects email addresses and usage analytics. Include data retention and deletion rights.',
+      'Draft an employment offer letter for a full-time marketing manager role, $75k salary, 15 days PTO, health benefits, and 90-day probation period.',
+      'Create a 50/50 partnership agreement between two co-founders for a software startup, covering decision-making, profit sharing, and exit provisions.',
+    ];
+    if (prompts[index]) {
+      document.getElementById('promptDisplay').textContent = prompts[index];
+      document.getElementById('outputArea').style.display = 'none';
+      document.getElementById('generateBtn').classList.remove('loading');
+      document.getElementById('btnText').textContent = '✦ Generate document';
+    }
+  });
+});
+</script>
+</body>
+</html>
