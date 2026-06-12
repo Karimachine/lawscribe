@@ -1,27 +1,15 @@
 const path = require('path');
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const documentsRouter = require('./routes/documents');
 
 dotenv.config();
 
+const express = require('express');
+const cors = require('cors');
+const documentsRouter = require('./routes/documents');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  throw new Error('Missing MONGO_URI in environment variables.');
-}
-
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  });
+// Using Supabase for authentication and data storage; no MongoDB required.
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());

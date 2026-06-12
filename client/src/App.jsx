@@ -60,27 +60,39 @@ function App() {
 
   useEffect(() => {
     const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-      setUser(data.session?.user || null);
-      if (data.session) {
-        await loadSavedDocs(data.session.access_token);
+      try {
+        const { data } = await supabase.auth.getSession();
+        setSession(data?.session || null);
+        setUser(data?.session?.user || null);
+        if (data?.session) {
+          await loadSavedDocs(data.session.access_token);
+        }
+      } catch (error) {
+        console.warn('Auth session error:', error);
       }
     };
 
     fetchSession();
 
-    const { subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user || null);
-      if (session) {
-        await loadSavedDocs(session.access_token);
-      } else {
-        setSavedDocs([]);
-      }
-    });
+    try {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        setSession(session);
+        setUser(session?.user || null);
+        if (session) {
+          await loadSavedDocs(session.access_token);
+        } else {
+          setSavedDocs([]);
+        }
+      });
 
-    return () => subscription.unsubscribe();
+      return () => {
+        if (data?.subscription) {
+          data.subscription.unsubscribe();
+        }
+      };
+    } catch (error) {
+      console.warn('Auth subscription error:', error);
+    }
   }, []);
 
   const activeDocButton = (doc) => {
