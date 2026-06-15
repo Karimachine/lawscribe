@@ -3,6 +3,16 @@ const supabase = require('../utils/supabaseClient');
 
 const router = express.Router();
 
+// If supabase is not configured, respond with a helpful 500 for all routes
+if (!supabase) {
+  router.use((req, res) => {
+    return res.status(500).json({ error: 'Server misconfigured: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing' });
+  });
+
+  module.exports = router;
+  return;
+}
+
 async function getUserFromToken(authHeader) {
   if (!supabase) return null;
   const token = authHeader?.replace('Bearer ', '').trim();
