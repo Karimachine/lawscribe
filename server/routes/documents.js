@@ -5,6 +5,10 @@ const Document = require('../models/Document');
 const router = express.Router();
 
 async function getUserFromToken(authHeader) {
+  if (!supabase) {
+    return null;
+  }
+  
   const token = authHeader?.replace('Bearer ', '').trim();
   if (!token) {
     return null;
