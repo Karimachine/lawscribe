@@ -54,52 +54,22 @@ function App() {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [savedDocs, setSavedDocs] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [stats, setStats] = useState({ documentsCount: 0, clientsCount: 0 });
+  const [route, setRoute] = useState(() => {
+    const path = window.location.pathname;
+    if (['/login', '/dashboard', '/clients'].includes(path)) {
+      return path;
+    }
+    window.history.replaceState({}, '', '/dashboard');
+    return '/dashboard';
+  });
   const [form, setForm] = useState({ email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        setSession(data?.session || null);
-        setUser(data?.session?.user || null);
-        if (data?.session) {
-          await loadSavedDocs(data.session.access_token);
-        }
-      } catch (error) {
-        console.warn('Auth session error:', error);
-      }
-    };
-
-    fetchSession();
-
-    try {
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        setSession(session);
-        setUser(session?.user || null);
-        if (session) {
-          await loadSavedDocs(session.access_token);
-        } else {
-          setSavedDocs([]);
-        }
-      });
-
-      return () => {
-        if (data?.subscription) {
-          data.subscription.unsubscribe();
-        }
-      };
-    } catch (error) {
-      console.warn('Auth subscription error:', error);
-    }
-  }, []);
-
-  const activeDocButton = (doc) => {
-    setActiveDoc(doc);
-    setPromptText(doc.prompt);
-    setGeneratedText('');
-  };
+  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
+  const [clientError, setClientError] = useState('');
+  const [clientLoading, setClientLoading] = useState(false);
 
   const loadSavedDocs = async (token) => {
     try {
@@ -115,6 +85,110 @@ function App() {
     } catch (error) {
       console.error('Failed to load saved documents', error);
     }
+  };
+
+  const loadClients = async (token) => {
+    try {
+      const response = await fetch('/api/clients', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setClients(data);
+      }
+    } catch (error) {
+      console.error('Failed to load clients', error);
+    }
+  };
+
+  const loadStats = async (token) => {
+    try {
+      const response = await fetch('/api/stats', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats({ documentsCount: data.documentsCount ?? 0, clientsCount: data.clientsCount ?? 0 });
+      }
+    } catch (error) {
+      console.error('Failed to load stats', error);
+    }
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const path = window.location.pathname;
+      if (['/login', '/dashboard', '/clients'].includes(path)) {
+        setRoute(path);
+      } else {
+        window.history.replaceState({}, '', '/dashboard');
+        setRoute('/dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigate = (path) => {
+    if (path !== window.location.pathname) {
+      window.history.pushState({}, '', path);
+    }
+    setRoute(path);
+  };
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        setSession(data?.session || null);
+        setUser(data?.session?.user || null);
+        const token = data?.session?.access_token;
+        if (token) {
+          await Promise.all([loadSavedDocs(token), loadClients(token), loadStats(token)]);
+        }
+      } catch (error) {
+        console.warn('Auth session error:', error);
+      }
+    };
+
+    fetchSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSession(session);
+      setUser(session?.user || null);
+      if (session?.access_token) {
+        await Promise.all([loadSavedDocs(session.access_token), loadClients(session.access_token), loadStats(session.access_token)]);
+      } else {
+        setSavedDocs([]);
+        setClients([]);
+        setStats({ documentsCount: 0, clientsCount: 0 });
+      }
+    });
+
+    return () => {
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user && route !== '/login') {
+      navigate('/login');
+    } else if (user && route === '/login') {
+      navigate('/dashboard');
+    }
+  }, [user, route]);
+
+  const activeDocButton = (doc) => {
+    setActiveDoc(doc);
+    setPromptText(doc.prompt);
+    setGeneratedText('');
   };
 
   const handleAuthChange = (field, value) => {
@@ -146,31 +220,104 @@ function App() {
     setSession(null);
     setUser(null);
     setSavedDocs([]);
+    setClients([]);
+    setStats({ documentsCount: 0, clientsCount: 0 });
+    navigate('/login');
   };
 
   const generateDoc = async () => {
+    if (!session?.access_token) {
+      setAuthError('Please sign in to generate documents.');
+      return;
+    }
+
     setLoading(true);
     setGeneratedText('');
 
-    setTimeout(async () => {
-      setGeneratedText(sampleContent);
-      if (session?.access_token) {
-        try {
-          await fetch('/api/documents', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({ title: activeDoc.title, prompt: promptText, content: sampleContent })
-          });
-          await loadSavedDocs(session.access_token);
-        } catch (error) {
-          console.error('Failed to save document', error);
-        }
+    try {
+      const response = await fetch('/api/documents/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ title: activeDoc.title, prompt: promptText })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to generate document');
       }
+
+      setGeneratedText(data.content || 'Document generated successfully.');
+      await loadSavedDocs(session.access_token);
+      await loadStats(session.access_token);
+    } catch (error) {
+      console.error('Failed to generate document', error);
+      setGeneratedText('There was a problem generating the document.');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
+  };
+
+  const handleClientChange = (field, value) => {
+    setClientForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addClient = async () => {
+    if (!session?.access_token) {
+      setClientError('Please sign in to manage clients.');
+      return;
+    }
+
+    setClientLoading(true);
+    setClientError('');
+
+    try {
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(clientForm)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to save client');
+      }
+
+      setClients((prev) => [data, ...prev]);
+      setClientForm({ name: '', email: '', phone: '', case_type: '' });
+      await loadStats(session.access_token);
+    } catch (error) {
+      console.error('Failed to create client', error);
+      setClientError('Unable to save client. Please check your input.');
+    } finally {
+      setClientLoading(false);
+    }
+  };
+
+  const removeClient = async (id) => {
+    if (!session?.access_token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/clients/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      if (response.ok) {
+        setClients((prev) => prev.filter((client) => client.id !== id));
+        await loadStats(session.access_token);
+      }
+    } catch (error) {
+      console.error('Failed to delete client', error);
+    }
   };
 
   const heroSub = useMemo(
@@ -179,266 +326,171 @@ function App() {
     []
   );
 
+  const isLoginPage = route === '/login';
+  const isDashboard = route === '/dashboard';
+  const isClients = route === '/clients';
+
   return (
     <div className="app-shell">
       <nav className="nav">
-        <a href="#" className="nav-logo">
+        <button className="nav-logo" onClick={() => navigate('/dashboard')}>
           Law<span>Scribe</span>
-        </a>
+        </button>
         <div className="nav-links">
-          <a href="#documents">Documents</a>
-          <a href="#how-it-works">How it works</a>
-          <a href="#pricing">Pricing</a>
+          <button className="nav-link" onClick={() => navigate('/dashboard')}>
+            Dashboard
+          </button>
+          <button className="nav-link" onClick={() => navigate('/clients')}>
+            Clients
+          </button>
           {user ? (
             <button className="nav-cta" onClick={signOut}>
               Sign out
             </button>
           ) : (
-            <a href="#auth" className="nav-cta">
+            <button className="nav-cta" onClick={() => navigate('/login')}>
               Sign in
-            </a>
+            </button>
           )}
         </div>
       </nav>
 
       <main>
-        <section className="hero" id="hero">
-          <span className="hero-badge">AI-Powered Legal Drafting</span>
-          <h1>
-            Legal documents,
-            <br />
-            <em>written in minutes</em>
-          </h1>
-          <p className="hero-sub">{heroSub}</p>
-          <div className="hero-actions">
-            <button className="btn-primary" onClick={generateDoc}>
-              {loading ? 'Generating…' : 'Generate a document →'}
-            </button>
-            <a href="#how-it-works" className="btn-secondary">
-              See how it works
-            </a>
-          </div>
-          <div className="social-proof">
-            <span>Trusted by 12,000+ individuals & businesses</span>
-            <span>★★★★★ 4.9 rating</span>
-            <span>50+ document types</span>
-          </div>
-        </section>
-
-        <section className="demo-wrap" id="demo-section">
-          <div className="demo-card">
-            <div className="demo-bar">
-              <div className="demo-dot" />
-              <div className="demo-dot" />
-              <div className="demo-dot" />
+        {isLoginPage && (
+          <section className="auth-section">
+            <div className="auth-panel">
+              <h2>Sign in to LawScribe</h2>
+              <label>Email</label>
+              <input type="email" value={form.email} onChange={(e) => handleAuthChange('email', e.target.value)} />
+              <label>Password</label>
+              <input type="password" value={form.password} onChange={(e) => handleAuthChange('password', e.target.value)} />
+              {authError && <p className="auth-error">{authError}</p>}
+              <div className="auth-actions">
+                <button disabled={authLoading} onClick={signIn}>
+                  {authLoading ? 'Signing in…' : 'Sign in'}
+                </button>
+                <button disabled={authLoading} className="secondary" onClick={signUp}>
+                  {authLoading ? 'Registering…' : 'Create account'}
+                </button>
+              </div>
             </div>
-            <div className="demo-inner">
-              <aside className="demo-sidebar">
-                <div className="demo-sidebar-label">My Documents</div>
-                {docTypes.map((doc) => (
-                  <button
-                    key={doc.id}
-                    className={`doc-item ${doc.id === activeDoc.id ? 'active' : ''}`}
-                    onClick={() => activeDocButton(doc)}
-                  >
-                    <span className="doc-icon">{doc.label}</span>
-                    {doc.title}
-                  </button>
-                ))}
-              </aside>
-              <div className="demo-main">
-                <div className="demo-prompt-label">Your request</div>
-                <div className="demo-prompt-box">{promptText}</div>
-                <button className="generate-btn" onClick={generateDoc} disabled={loading}>
-                  {loading ? '✦ Generating...' : '✦ Generate document'}
+          </section>
+        )}
+
+        {isDashboard && (
+          <section className="dashboard-page">
+            <div className="page-header">
+              <div>
+                <span className="section-label">Dashboard</span>
+                <h2>Welcome back{user?.email ? `, ${user.email}` : ''}</h2>
+                <p>Manage your documents, clients, and generate new legal content.</p>
+              </div>
+            </div>
+
+            <div className="stats-grid">
+              <div className="stat-card">
+                <h3>Documents</h3>
+                <p>{stats.documentsCount}</p>
+              </div>
+              <div className="stat-card">
+                <h3>Clients</h3>
+                <p>{stats.clientsCount}</p>
+              </div>
+            </div>
+
+            <div className="dashboard-grid">
+              <div className="dashboard-panel">
+                <h3>Generate a new document</h3>
+                <div className="doc-types">
+                  {docTypes.map((doc) => (
+                    <button
+                      key={doc.id}
+                      className={`doc-item ${doc.id === activeDoc.id ? 'active' : ''}`}
+                      onClick={() => activeDocButton(doc)}
+                    >
+                      {doc.label}
+                    </button>
+                  ))}
+                </div>
+                <label>Prompt</label>
+                <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={5} />
+                <button className="btn-primary" onClick={generateDoc} disabled={loading}>
+                  {loading ? 'Generating…' : 'Generate document'}
                 </button>
                 {generatedText && (
-                  <div className="demo-output">
-                    <div className="demo-output-title">Generated document preview</div>
+                  <div className="output-panel">
+                    <h4>Generated document</h4>
                     <p>{generatedText}</p>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section" id="documents">
-          <div className="section-header">
-            <span className="section-label">Document Library</span>
-            <h2>Every document your business needs</h2>
-            <p className="section-sub">
-              From simple NDAs to complex partnership agreements — generated, not just templated.
-            </p>
-          </div>
-          <div className="doc-grid">
-            {docTypes.map((card) => (
-              <div key={card.id} className="doc-card">
-                <div className="doc-card-icon">📋</div>
-                <h3>{card.title}</h3>
-                <p>{card.prompt}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="section steps-bg" id="how-it-works">
-          <div className="section-header">
-            <span className="section-label">Process</span>
-            <h2>Three steps to a signed document</h2>
-            <p className="section-sub">From blank page to legally sound document in under five minutes.</p>
-          </div>
-          <div className="steps-grid">
-            <div className="step">
-              <div className="step-num">01</div>
-              <h3>Describe your situation</h3>
-              <p>Tell us in plain English what you need. Mention the parties involved, key terms, and any specific requirements.</p>
-            </div>
-            <div className="step">
-              <div className="step-num">02</div>
-              <h3>AI drafts your document</h3>
-              <p>Our model generates a complete, jurisdiction-aware document with proper legal language and all standard clauses.</p>
-            </div>
-            <div className="step">
-              <div className="step-num">03</div>
-              <h3>Edit, export & sign</h3>
-              <p>Review and refine inline, then download as PDF or Word. Send for e-signature directly from LawScribe.</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="section testimonials-bg">
-          <div className="section-header">
-            <span className="section-label">Testimonials</span>
-            <h2>Trusted by founders, freelancers & families</h2>
-            <p className="section-sub section-sub-light">Real people using LawScribe for real documents.</p>
-          </div>
-          <div className="testi-grid">
-            <article className="testi-card">
-              <div className="testi-stars">★★★★★</div>
-              <p className="testi-text">"Generated a contractor NDA in under two minutes. My lawyer would have charged $400 for the same thing."</p>
-              <div className="testi-author">
-                <span className="testi-avatar">MK</span>
-                <div>
-                  <div className="testi-name">Marcus Kim</div>
-                  <div className="testi-role">Founder, Wavefront Studio</div>
-                </div>
-              </div>
-            </article>
-            <article className="testi-card">
-              <div className="testi-stars">★★★★★</div>
-              <p className="testi-text">"The lease agreement it drafted for my rental property was thorough and state-specific. Genuinely impressive."</p>
-              <div className="testi-author">
-                <span className="testi-avatar">RL</span>
-                <div>
-                  <div className="testi-name">Rachel Liu</div>
-                  <div className="testi-role">Property owner, Austin TX</div>
-                </div>
-              </div>
-            </article>
-            <article className="testi-card">
-              <div className="testi-stars">★★★★★</div>
-              <p className="testi-text">"As a freelancer, I used to just hope for the best with clients. Now I have proper contracts for every project."</p>
-              <div className="testi-author">
-                <span className="testi-avatar">JP</span>
-                <div>
-                  <div className="testi-name">James Patel</div>
-                  <div className="testi-role">Independent designer</div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section className="section" id="pricing">
-          <div className="section-header centered">
-            <span className="section-label">Pricing</span>
-            <h2>Simple, honest pricing</h2>
-            <p className="section-sub">No hidden fees. Cancel anytime.</p>
-          </div>
-          <div className="pricing-grid">
-            <div className="plan">
-              <div className="plan-name">Starter</div>
-              <div className="plan-price">Free</div>
-              <div className="plan-desc">For individuals with occasional document needs.</div>
-              <div className="plan-divider" />
-              <div className="plan-feature">3 documents per month</div>
-              <div className="plan-feature">PDF export</div>
-              <div className="plan-feature">10 document types</div>
-              <div className="plan-feature">Basic editing tools</div>
-              <button className="plan-btn">Get started free</button>
-            </div>
-            <div className="plan featured">
-              <div className="plan-badge">Most popular</div>
-              <div className="plan-name">Professional</div>
-              <div className="plan-price">$19 <span>/ mo</span></div>
-              <div className="plan-desc">For freelancers and small businesses drafting regularly.</div>
-              <div className="plan-divider" />
-              <div className="plan-feature">Unlimited documents</div>
-              <div className="plan-feature">PDF & Word export</div>
-              <div className="plan-feature">All 50+ document types</div>
-              <div className="plan-feature">E-signature (5 per month)</div>
-              <button className="plan-btn featured">Start 7-day free trial</button>
-            </div>
-            <div className="plan">
-              <div className="plan-name">Business</div>
-              <div className="plan-price">$59 <span>/ mo</span></div>
-              <div className="plan-desc">For teams and businesses with high-volume needs.</div>
-              <div className="plan-divider" />
-              <div className="plan-feature">Everything in Professional</div>
-              <div className="plan-feature">Unlimited e-signatures</div>
-              <div className="plan-feature">Team collaboration</div>
-              <div className="plan-feature">Custom clause library</div>
-              <button className="plan-btn">Start 7-day free trial</button>
-            </div>
-          </div>
-        </section>
-
-        <section className="section cta-section">
-          <span className="section-label">Get started today</span>
-          <h2>Your first document is on us</h2>
-          <p>No credit card required. No legal jargon. Just documents that work.</p>
-          <button className="btn-primary">Generate your first document →</button>
-        </section>
-
-        <section className="section auth-section" id="auth">
-          <div className="auth-panel">
-            <h3>{user ? 'Welcome back' : 'Sign in to save documents'}</h3>
-            {user ? (
-              <p>Signed in as <strong>{user.email}</strong>.</p>
-            ) : (
-              <>
-                <label>Email</label>
-                <input type="email" value={form.email} onChange={(e) => handleAuthChange('email', e.target.value)} />
-                <label>Password</label>
-                <input type="password" value={form.password} onChange={(e) => handleAuthChange('password', e.target.value)} />
-                {authError && <p className="auth-error">{authError}</p>}
-                <div className="auth-actions">
-                  <button disabled={authLoading} onClick={signIn}>
-                    {authLoading ? 'Signing in…' : 'Sign in'}
-                  </button>
-                  <button disabled={authLoading} className="secondary" onClick={signUp}>
-                    {authLoading ? 'Registering…' : 'Create account'}
-                  </button>
-                </div>
-              </>
-            )}
-            {user && (
-              <div className="saved-docs">
-                <h4>Saved Documents</h4>
+              <div className="dashboard-panel">
+                <h3>Saved documents</h3>
                 {savedDocs.length === 0 ? (
                   <p>No saved documents yet.</p>
                 ) : (
-                  <ul>
+                  <ul className="saved-list">
                     {savedDocs.map((doc) => (
-                      <li key={doc._id}>{doc.title}</li>
+                      <li key={doc.id}>{doc.title}</li>
                     ))}
                   </ul>
                 )}
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
+
+        {isClients && (
+          <section className="clients-page">
+            <div className="page-header">
+              <div>
+                <span className="section-label">Clients</span>
+                <h2>Client directory</h2>
+                <p>Add, view, and remove clients from your roster.</p>
+              </div>
+            </div>
+
+            <div className="clients-grid">
+              <div className="client-panel">
+                <h3>Add a client</h3>
+                <label>Name</label>
+                <input type="text" value={clientForm.name} onChange={(e) => handleClientChange('name', e.target.value)} />
+                <label>Email</label>
+                <input type="email" value={clientForm.email} onChange={(e) => handleClientChange('email', e.target.value)} />
+                <label>Phone</label>
+                <input type="text" value={clientForm.phone} onChange={(e) => handleClientChange('phone', e.target.value)} />
+                <label>Case type</label>
+                <input type="text" value={clientForm.case_type} onChange={(e) => handleClientChange('case_type', e.target.value)} />
+                {clientError && <p className="auth-error">{clientError}</p>}
+                <button className="btn-primary" disabled={clientLoading} onClick={addClient}>
+                  {clientLoading ? 'Saving…' : 'Save client'}
+                </button>
+              </div>
+
+              <div className="client-panel">
+                <h3>Client list</h3>
+                {clients.length === 0 ? (
+                  <p>No clients yet.</p>
+                ) : (
+                  <ul className="client-list">
+                    {clients.map((client) => (
+                      <li key={client.id}>
+                        <div>
+                          <strong>{client.name}</strong>
+                          <div>{client.email}</div>
+                          <div>{client.phone}</div>
+                        </div>
+                        <button className="danger" onClick={() => removeClient(client.id)}>
+                          Delete
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       <footer className="footer">

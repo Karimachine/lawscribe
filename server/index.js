@@ -5,29 +5,19 @@ dotenv.config();
 
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const documentsRouter = require('./routes/documents');
+const clientsRouter = require('./routes/clients');
+const statsRouter = require('./routes/stats');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  throw new Error('Missing MONGO_URI in environment variables.');
-}
-
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  });
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use('/api/documents', documentsRouter);
+app.use('/api/clients', clientsRouter);
+app.use('/api/stats', statsRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
