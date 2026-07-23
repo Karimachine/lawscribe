@@ -7,14 +7,15 @@
     "client": "npm --prefix client run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "npm --prefix client run build",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "supabase:verify-documents": "node scripts/verify_documents_table.js",
+    "supabase:apply-migrations": "node scripts/apply_migrations.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.34.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^4.18.3",
-    "mongoose": "^7.5.0"
+    "express": "^4.18.3"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

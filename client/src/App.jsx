@@ -67,9 +67,55 @@ function App() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+<<<<<<< HEAD
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
   const [clientError, setClientError] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
+=======
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        setSession(data?.session || null);
+        setUser(data?.session?.user || null);
+        if (data?.session) {
+          await loadSavedDocs(data.session.access_token);
+        }
+      } catch (error) {
+        console.warn('Auth session error:', error);
+      }
+    };
+
+    fetchSession();
+
+    try {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        setSession(session);
+        setUser(session?.user || null);
+        if (session) {
+          await loadSavedDocs(session.access_token);
+        } else {
+          setSavedDocs([]);
+        }
+      });
+
+      return () => {
+        if (data?.subscription) {
+          data.subscription.unsubscribe();
+        }
+      };
+    } catch (error) {
+      console.warn('Auth subscription error:', error);
+    }
+  }, []);
+
+  const activeDocButton = (doc) => {
+    setActiveDoc(doc);
+    setPromptText(doc.prompt);
+    setGeneratedText('');
+  };
+>>>>>>> 73f227a27ba1d47b179c6b9c6f56d79c17070cd0
 
   const loadSavedDocs = async (token) => {
     try {
