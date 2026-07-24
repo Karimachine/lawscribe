@@ -235,21 +235,36 @@ function App() {
     setGeneratedText('');
 
     try {
-      const response = await fetch('/api/documents/generate', {
+      const generateResponse = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt: promptText, documentType: activeDoc.title })
+      });
+
+      const generateData = await generateResponse.json();
+      if (!generateResponse.ok) {
+        throw new Error(generateData?.error || 'Failed to generate document');
+      }
+
+      const content = generateData.content || 'Document generated successfully.';
+      setGeneratedText(content);
+
+      const saveResponse = await fetch('/api/documents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ title: activeDoc.title, prompt: promptText })
+        body: JSON.stringify({ title: activeDoc.title, prompt: promptText, content })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to generate document');
+      if (!saveResponse.ok) {
+        const saveData = await saveResponse.json().catch(() => ({}));
+        throw new Error(saveData?.error || 'Failed to save document');
       }
 
-      setGeneratedText(data.content || 'Document generated successfully.');
       await loadSavedDocs(session.access_token);
       await loadStats(session.access_token);
     } catch (error) {

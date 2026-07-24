@@ -6,20 +6,14 @@ dotenv.config();
 const express = require('express');
 const cors = require('cors');
 const documentsRouter = require('./routes/documents');
-<<<<<<< HEAD
 const clientsRouter = require('./routes/clients');
 const statsRouter = require('./routes/stats');
-
-const app = express();
-const PORT = process.env.PORT || 4000;
-=======
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 // Helpful startup information
 console.log('Starting server', { env: process.env.NODE_ENV || 'development', port: PORT });
 // Using Supabase for authentication and data storage; no MongoDB required.
->>>>>>> 73f227a27ba1d47b179c6b9c6f56d79c17070cd0
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
