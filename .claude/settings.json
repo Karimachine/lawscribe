@@ -6,7 +6,11 @@
       "Bash(node -e \"console.log\\(require\\('./client/node_modules/@anthropic-ai/sdk/package.json'\\).version\\)\")",
       "Bash(node --check client/api/generate.js)",
       "Bash(node -e ' *)",
-      "Bash(echo \"exit code: $?\")"
+      "Bash(echo \"exit code: $?\")",
+      "Bash(vercel --version)",
+      "Bash(node --check client/api/documents.js)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node --check client/api/_lib/supabaseAdmin.js)"
     ]
   }
 }
