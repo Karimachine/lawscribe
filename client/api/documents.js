@@ -41,7 +41,12 @@ export default async function handler(req, res) {
 
     const { data, error } = await supabase.from('documents').insert([insert]).select().single();
     if (error) {
-      console.error('Supabase insert error:', error);
+      console.error('Supabase insert error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       return res.status(500).json({ error: 'Unable to save document' });
     }
 
