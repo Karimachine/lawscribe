@@ -1,10 +1,13 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
 
 export default async function handler(req, res) {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return res.status(500).json({ error: 'Server misconfigured: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing' });
+  const missingVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter((name) => !process.env[name]);
+  if (missingVars.length > 0) {
+    console.error(`Missing required environment variable(s): ${missingVars.join(', ')}`);
+    return res.status(500).json({ error: `Server misconfigured: missing ${missingVars.join(', ')}` });
   }
+
+  const supabase = getSupabaseAdmin();
 
   const user = await getUserFromToken(supabase, req.headers.authorization);
   if (!user) {
