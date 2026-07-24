@@ -405,16 +405,16 @@ function App() {
                   {docTypes.map((doc) => (
                     <button
                       key={doc.id}
-                      className={`doc-item ${doc.id === activeDoc.id ? 'active' : ''}`}
+                      className={`doc-option ${doc.id === activeDoc.id ? 'active' : ''}`}
                       onClick={() => activeDocButton(doc)}
                     >
-                      {doc.label}
+                      <span>{doc.title}</span>
                     </button>
                   ))}
                 </div>
                 <label>Prompt</label>
-                <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={5} />
-                <button className="btn-primary" onClick={generateDoc} disabled={loading}>
+                <textarea className="dashboard-textarea" value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={7} />
+                <button className="btn-primary generate-action" onClick={generateDoc} disabled={loading}>
                   {loading ? 'Generating…' : 'Generate document'}
                 </button>
                 {generatedText && (
