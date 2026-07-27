@@ -85,6 +85,28 @@ button {
   color: var(--ink);
 }
 
+.nav-links a.active {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 0.5rem;
+}
+
+.nav-toggle span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--ink);
+}
+
 .nav-cta,
 .btn-primary,
 .plan-btn,
@@ -289,6 +311,47 @@ button {
 .demo-output-title {
   font-family: 'Libre Baskerville', serif;
   margin-bottom: 0.75rem;
+}
+
+.demo-watermark {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.demo-signup-prompt {
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  background: rgba(184, 134, 11, 0.06);
+  border-radius: 16px;
+}
+
+.demo-signup-prompt p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.disclaimer-box {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: left;
+  padding: 1.75rem 2rem;
+  border: 1px solid rgba(164, 35, 35, 0.25);
+  background: rgba(164, 35, 35, 0.04);
+  border-radius: 18px;
+}
+
+.disclaimer-box h3 {
+  font-family: 'Libre Baskerville', serif;
+  margin-bottom: 0.75rem;
+}
+
+.disclaimer-box p {
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .section {
@@ -882,8 +945,26 @@ button {
     font-size: 2.75rem;
   }
 
+  .nav-toggle {
+    display: flex;
+  }
+
   .nav-links {
     display: none;
+  }
+
+  .nav-links.open {
+    display: flex;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem 1.5rem;
+    background: var(--paper);
+    border-bottom: 1px solid var(--border);
   }
 
   .demo-inner {
