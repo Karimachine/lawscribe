@@ -51,13 +51,7 @@ export default async function handler(req, res) {
         details: error.details,
         hint: error.hint
       });
-      return res.status(500).json({
-        error: 'Unable to save client',
-        debug_message: error.message,
-        debug_code: error.code,
-        debug_details: error.details,
-        debug_hint: error.hint
-      });
+      return res.status(500).json({ error: 'Unable to save client' });
     }
 
     return res.status(201).json(data);
