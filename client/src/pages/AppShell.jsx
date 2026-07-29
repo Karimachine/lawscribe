@@ -27,6 +27,13 @@ function AppShell() {
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
   const [clientError, setClientError] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
+  const [apiKeys, setApiKeys] = useState([]);
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyError, setApiKeyError] = useState('');
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [revokingKeyId, setRevokingKeyId] = useState(null);
+  const [justCreatedKey, setJustCreatedKey] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const loadSavedDocs = async (token) => {
     try {
@@ -76,6 +83,22 @@ function AppShell() {
     }
   };
 
+  const loadApiKeys = async (token) => {
+    try {
+      const response = await fetch('/api/keys', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch (error) {
+      console.error('Failed to load API keys', error);
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -84,7 +107,7 @@ function AppShell() {
         setUser(data?.session?.user || null);
         const token = data?.session?.access_token;
         if (token) {
-          await Promise.all([loadSavedDocs(token), loadClients(token), loadStats(token)]);
+          await Promise.all([loadSavedDocs(token), loadClients(token), loadStats(token), loadApiKeys(token)]);
         }
       } catch (error) {
         console.warn('Auth session error:', error);
@@ -97,11 +120,18 @@ function AppShell() {
       setSession(session);
       setUser(session?.user || null);
       if (session?.access_token) {
-        await Promise.all([loadSavedDocs(session.access_token), loadClients(session.access_token), loadStats(session.access_token)]);
+        await Promise.all([
+          loadSavedDocs(session.access_token),
+          loadClients(session.access_token),
+          loadStats(session.access_token),
+          loadApiKeys(session.access_token)
+        ]);
       } else {
         setSavedDocs([]);
         setClients([]);
         setStats({ documentsCount: 0, clientsCount: 0 });
+        setApiKeys([]);
+        setJustCreatedKey(null);
       }
     });
 
@@ -157,6 +187,8 @@ function AppShell() {
     setSavedDocs([]);
     setClients([]);
     setStats({ documentsCount: 0, clientsCount: 0 });
+    setApiKeys([]);
+    setJustCreatedKey(null);
     navigate('/login');
   };
 
@@ -257,9 +289,86 @@ function AppShell() {
     }
   };
 
+  const createApiKey = async () => {
+    if (!session?.access_token) {
+      setApiKeyError('Please sign in to create API keys.');
+      return;
+    }
+
+    setApiKeyLoading(true);
+    setApiKeyError('');
+    setJustCreatedKey(null);
+    setCopied(false);
+
+    try {
+      const response = await fetch('/api/keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ name: apiKeyName.trim() || 'Default key' })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to create API key');
+      }
+
+      setJustCreatedKey(data.key);
+      setApiKeyName('');
+      await loadApiKeys(session.access_token);
+    } catch (error) {
+      console.error('Failed to create API key', error);
+      setApiKeyError('Unable to create API key. Please try again.');
+    } finally {
+      setApiKeyLoading(false);
+    }
+  };
+
+  const revokeApiKey = async (id) => {
+    if (!session?.access_token) {
+      return;
+    }
+
+    setRevokingKeyId(id);
+
+    try {
+      const response = await fetch(`/api/keys/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      if (response.ok) {
+        if (justCreatedKey?.id === id) {
+          setJustCreatedKey(null);
+        }
+        await loadApiKeys(session.access_token);
+      }
+    } catch (error) {
+      console.error('Failed to revoke API key', error);
+    } finally {
+      setRevokingKeyId(null);
+    }
+  };
+
+  const copyApiKey = async () => {
+    if (!justCreatedKey?.fullKey) return;
+    try {
+      await navigator.clipboard.writeText(justCreatedKey.fullKey);
+      setCopied(true);
+    } catch (error) {
+      console.error('Failed to copy API key', error);
+    }
+  };
+
+  const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : 'Never');
+
   const isLoginPage = location.pathname === '/login';
   const isDashboard = location.pathname === '/app';
   const isClients = location.pathname === '/app/clients';
+  const isApiKeys = location.pathname === '/app/keys';
 
   return (
     <div className="app-shell">
@@ -273,6 +382,9 @@ function AppShell() {
           </button>
           <button className="nav-link" onClick={() => navigate('/app/clients')}>
             Clients
+          </button>
+          <button className="nav-link" onClick={() => navigate('/app/keys')}>
+            API Keys
           </button>
           {user ? (
             <button className="nav-cta" onClick={signOut}>
@@ -414,6 +526,79 @@ function AppShell() {
                         <button className="danger" onClick={() => removeClient(client.id)}>
                           Delete
                         </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {isApiKeys && (
+          <section className="clients-page">
+            <div className="page-header">
+              <div>
+                <span className="section-label">API Keys</span>
+                <h2>API keys</h2>
+                <p>Create and manage keys for accessing the LawScribe API programmatically.</p>
+              </div>
+            </div>
+
+            <div className="clients-grid">
+              <div className="client-panel">
+                <h3>Create a new key</h3>
+                <label>Key name</label>
+                <input
+                  type="text"
+                  placeholder="Default key"
+                  value={apiKeyName}
+                  onChange={(e) => setApiKeyName(e.target.value)}
+                />
+                {apiKeyError && <p className="auth-error">{apiKeyError}</p>}
+                <button className="btn-primary" disabled={apiKeyLoading} onClick={createApiKey}>
+                  {apiKeyLoading ? 'Creating…' : 'Create key'}
+                </button>
+
+                {justCreatedKey && (
+                  <div className="output-panel">
+                    <h4>Copy your new key now</h4>
+                    <p>
+                      This is the only time the full key is shown. Store it somewhere safe — you won't be able to
+                      view it again.
+                    </p>
+                    <p className="api-key-value">{justCreatedKey.fullKey}</p>
+                    <button className="btn-secondary" onClick={copyApiKey}>
+                      {copied ? 'Copied!' : 'Copy to clipboard'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="client-panel">
+                <h3>Your keys</h3>
+                {apiKeys.length === 0 ? (
+                  <p>No API keys yet.</p>
+                ) : (
+                  <ul className="client-list">
+                    {apiKeys.map((key) => (
+                      <li key={key.id}>
+                        <div>
+                          <strong>{key.name}</strong>
+                          <div>{key.key_prefix}…</div>
+                          <div>Created {formatDate(key.created_at)}</div>
+                          <div>Last used {formatDate(key.last_used_at)}</div>
+                          <div>{key.revoked_at ? `Revoked ${formatDate(key.revoked_at)}` : 'Active'}</div>
+                        </div>
+                        {!key.revoked_at && (
+                          <button
+                            className="danger"
+                            disabled={revokingKeyId === key.id}
+                            onClick={() => revokeApiKey(key.id)}
+                          >
+                            {revokingKeyId === key.id ? 'Revoking…' : 'Revoke'}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

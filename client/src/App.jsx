@@ -12,6 +12,7 @@ function App() {
         <Route path="/login" element={<AppShell />} />
         <Route path="/app" element={<AppShell />} />
         <Route path="/app/clients" element={<AppShell />} />
+        <Route path="/app/keys" element={<AppShell />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
