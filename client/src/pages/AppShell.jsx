@@ -20,6 +20,9 @@ function AppShell() {
   const [promptText, setPromptText] = useState(docTypes[0].prompt);
   const [generatedText, setGeneratedText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [savedDocs, setSavedDocs] = useState([]);
@@ -173,6 +176,8 @@ function AppShell() {
     setActiveDoc(doc);
     setPromptText(doc.prompt);
     setGeneratedText('');
+    setSaveError('');
+    setSaveSuccess(false);
   };
 
   const handleAuthChange = (field, value) => {
@@ -220,32 +225,58 @@ function AppShell() {
 
     setLoading(true);
     setGeneratedText('');
+    setSaveError('');
+    setSaveSuccess(false);
 
     try {
       const content = await generateDocument({ prompt: promptText, documentType: activeDoc.title });
       setGeneratedText(content || 'Document generated successfully.');
+    } catch (error) {
+      console.error('Failed to generate document', error);
+      setGeneratedText('There was a problem generating the document.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const saveDocument = async () => {
+    if (!session?.access_token) {
+      setSaveError(t('dashboard_signInToSave'));
+      return;
+    }
+
+    if (!generatedText.trim()) {
+      setSaveError(t('dashboard_nothingToSave'));
+      return;
+    }
+
+    setSaveLoading(true);
+    setSaveError('');
+    setSaveSuccess(false);
+
+    try {
       const saveResponse = await fetch('/api/documents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ title: activeDoc.title, prompt: promptText, content })
+        body: JSON.stringify({ title: activeDoc.title, prompt: promptText, content: generatedText })
       });
 
+      const saveData = await saveResponse.json().catch(() => ({}));
       if (!saveResponse.ok) {
-        const saveData = await saveResponse.json().catch(() => ({}));
         throw new Error(saveData?.error || 'Failed to save document');
       }
 
+      setSaveSuccess(true);
       await loadSavedDocs(session.access_token);
       await loadStats(session.access_token);
     } catch (error) {
-      console.error('Failed to generate document', error);
-      setGeneratedText('There was a problem generating the document.');
+      console.error('Failed to save document', error);
+      setSaveError(t('dashboard_saveErrorGeneric'));
     } finally {
-      setLoading(false);
+      setSaveLoading(false);
     }
   };
 
@@ -534,7 +565,20 @@ function AppShell() {
                 {generatedText && (
                   <div className="output-panel">
                     <h4>{t('dashboard_generatedTitle')}</h4>
-                    <p>{generatedText}</p>
+                    <textarea
+                      className="dashboard-textarea"
+                      value={generatedText}
+                      onChange={(e) => {
+                        setGeneratedText(e.target.value);
+                        setSaveSuccess(false);
+                      }}
+                      rows={10}
+                    />
+                    {saveError && <p className="auth-error">{saveError}</p>}
+                    {saveSuccess && <p className="save-success">{t('dashboard_saveSuccess')}</p>}
+                    <button className="btn-primary generate-action" onClick={saveDocument} disabled={saveLoading}>
+                      {saveLoading ? t('dashboard_saving') : t('dashboard_saveDocument')}
+                    </button>
                   </div>
                 )}
               </div>

@@ -680,6 +680,11 @@ button {
   color: #a42323;
 }
 
+.save-success {
+  margin-top: 0.75rem;
+  color: #2f7a3b;
+}
+
 .dashboard-page {
   padding: 4rem 3rem 5rem;
 }
