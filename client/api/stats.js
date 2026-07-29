@@ -37,8 +37,8 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      documentCount: documentsResult.count || 0,
-      clientCount: clientsResult.count || 0
+      documentsCount: documentsResult.count || 0,
+      clientsCount: clientsResult.count || 0
     });
   }
 
