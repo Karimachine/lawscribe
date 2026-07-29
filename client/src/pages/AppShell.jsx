@@ -1,16 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import { docTypes } from '../lib/docTypes';
 import { generateDocument } from '../lib/generateDocument';
+import { usePreferences } from '../context/PreferencesContext';
+import { languageOptions } from '../lib/translations';
 
-// The authenticated app (dashboard, clients, and the sign in / sign up form).
-// Business logic here is unchanged from the original single-page App.jsx —
-// only the routing mechanism was swapped from hand-rolled pushState/popstate
-// to react-router, so it can coexist with the new public marketing routes.
+// The authenticated app (dashboard, clients, API keys, and the sign in /
+// sign up form). Business logic here is unchanged from the original
+// single-page App.jsx — only the routing mechanism was swapped from
+// hand-rolled pushState/popstate to react-router, so it can coexist with
+// the new public marketing routes.
 function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, toggleTheme, language, setLanguage, t } = usePreferences();
 
   const [activeDoc, setActiveDoc] = useState(docTypes[0]);
   const [promptText, setPromptText] = useState(docTypes[0].prompt);
@@ -34,6 +38,8 @@ function AppShell() {
   const [revokingKeyId, setRevokingKeyId] = useState(null);
   const [justCreatedKey, setJustCreatedKey] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
 
   const loadSavedDocs = async (token) => {
     try {
@@ -150,6 +156,19 @@ function AppShell() {
     }
   }, [user, location.pathname, navigate]);
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setSettingsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsOpen]);
+
   const activeDocButton = (doc) => {
     setActiveDoc(doc);
     setPromptText(doc.prompt);
@@ -189,6 +208,7 @@ function AppShell() {
     setStats({ documentsCount: 0, clientsCount: 0 });
     setApiKeys([]);
     setJustCreatedKey(null);
+    setSettingsOpen(false);
     navigate('/login');
   };
 
@@ -378,21 +398,21 @@ function AppShell() {
         </button>
         <div className="nav-links">
           <button className="nav-link" onClick={() => navigate('/app')}>
-            Dashboard
+            {t('nav_dashboard')}
           </button>
           <button className="nav-link" onClick={() => navigate('/app/clients')}>
-            Clients
+            {t('nav_clients')}
           </button>
           <button className="nav-link" onClick={() => navigate('/app/keys')}>
-            API Keys
+            {t('nav_apiKeys')}
           </button>
           {user ? (
             <button className="nav-cta" onClick={signOut}>
-              Sign out
+              {t('nav_signOut')}
             </button>
           ) : (
             <button className="nav-cta" onClick={() => navigate('/login')}>
-              Sign in
+              {t('nav_signIn')}
             </button>
           )}
         </div>
@@ -402,18 +422,18 @@ function AppShell() {
         {isLoginPage && (
           <section className="auth-section">
             <div className="auth-panel">
-              <h2>Sign in to LawScribe</h2>
-              <label>Email</label>
+              <h2>{t('login_title')}</h2>
+              <label>{t('login_email')}</label>
               <input type="email" value={form.email} onChange={(e) => handleAuthChange('email', e.target.value)} />
-              <label>Password</label>
+              <label>{t('login_password')}</label>
               <input type="password" value={form.password} onChange={(e) => handleAuthChange('password', e.target.value)} />
               {authError && <p className="auth-error">{authError}</p>}
               <div className="auth-actions">
                 <button disabled={authLoading} onClick={signIn}>
-                  {authLoading ? 'Signing in…' : 'Sign in'}
+                  {authLoading ? t('login_signingIn') : t('login_signIn')}
                 </button>
                 <button disabled={authLoading} className="secondary" onClick={signUp}>
-                  {authLoading ? 'Registering…' : 'Create account'}
+                  {authLoading ? t('login_registering') : t('login_createAccount')}
                 </button>
               </div>
             </div>
@@ -424,26 +444,77 @@ function AppShell() {
           <section className="dashboard-page">
             <div className="page-header">
               <div>
-                <span className="section-label">Dashboard</span>
-                <h2>Welcome back{user?.email ? `, ${user.email}` : ''}</h2>
-                <p>Manage your documents, clients, and generate new legal content.</p>
+                <span className="section-label">{t('dashboard_label')}</span>
+                <h2>
+                  {t('dashboard_welcome')}
+                  {user?.email ? `, ${user.email}` : ''}
+                </h2>
+                <p>{t('dashboard_subtitle')}</p>
+              </div>
+
+              <div className="settings-wrap" ref={settingsRef}>
+                <button
+                  type="button"
+                  className="settings-trigger"
+                  aria-expanded={settingsOpen}
+                  onClick={() => setSettingsOpen((open) => !open)}
+                >
+                  ⚙ {t('settings_title')}
+                </button>
+
+                {settingsOpen && (
+                  <div className="settings-panel">
+                    <div className="settings-section">
+                      <h4>{t('settings_account')}</h4>
+                      <p className="settings-account-email">
+                        {t('settings_signedInAs')} {user?.email}
+                      </p>
+                    </div>
+
+                    <div className="settings-section">
+                      <h4>{t('settings_appearance')}</h4>
+                      <div className="settings-row">
+                        <span>{t('settings_darkMode')}</span>
+                        <label className="toggle-switch">
+                          <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} />
+                          <span className="toggle-switch-track" />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
+                      <h4>{t('settings_language')}</h4>
+                      <select
+                        className="settings-select"
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                      >
+                        {languageOptions.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="stats-grid">
               <div className="stat-card">
-                <h3>Documents</h3>
+                <h3>{t('dashboard_statDocuments')}</h3>
                 <p>{stats.documentsCount}</p>
               </div>
               <div className="stat-card">
-                <h3>Clients</h3>
+                <h3>{t('dashboard_statClients')}</h3>
                 <p>{stats.clientsCount}</p>
               </div>
             </div>
 
             <div className="dashboard-grid">
               <div className="dashboard-panel">
-                <h3>Generate a new document</h3>
+                <h3>{t('dashboard_generateTitle')}</h3>
                 <div className="doc-types">
                   {docTypes.map((doc) => (
                     <button
@@ -455,22 +526,22 @@ function AppShell() {
                     </button>
                   ))}
                 </div>
-                <label>Prompt</label>
+                <label>{t('dashboard_promptLabel')}</label>
                 <textarea className="dashboard-textarea" value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={7} />
                 <button className="btn-primary generate-action" onClick={generateDoc} disabled={loading}>
-                  {loading ? 'Generating…' : 'Generate document'}
+                  {loading ? t('dashboard_generating') : t('dashboard_generate')}
                 </button>
                 {generatedText && (
                   <div className="output-panel">
-                    <h4>Generated document</h4>
+                    <h4>{t('dashboard_generatedTitle')}</h4>
                     <p>{generatedText}</p>
                   </div>
                 )}
               </div>
               <div className="dashboard-panel">
-                <h3>Saved documents</h3>
+                <h3>{t('dashboard_savedTitle')}</h3>
                 {savedDocs.length === 0 ? (
-                  <p>No saved documents yet.</p>
+                  <p>{t('dashboard_noSaved')}</p>
                 ) : (
                   <ul className="saved-list">
                     {savedDocs.map((doc) => (
@@ -487,33 +558,33 @@ function AppShell() {
           <section className="clients-page">
             <div className="page-header">
               <div>
-                <span className="section-label">Clients</span>
-                <h2>Client directory</h2>
-                <p>Add, view, and remove clients from your roster.</p>
+                <span className="section-label">{t('clients_label')}</span>
+                <h2>{t('clients_title')}</h2>
+                <p>{t('clients_subtitle')}</p>
               </div>
             </div>
 
             <div className="clients-grid">
               <div className="client-panel">
-                <h3>Add a client</h3>
-                <label>Name</label>
+                <h3>{t('clients_addTitle')}</h3>
+                <label>{t('clients_name')}</label>
                 <input type="text" value={clientForm.name} onChange={(e) => handleClientChange('name', e.target.value)} />
-                <label>Email</label>
+                <label>{t('clients_email')}</label>
                 <input type="email" value={clientForm.email} onChange={(e) => handleClientChange('email', e.target.value)} />
-                <label>Phone</label>
+                <label>{t('clients_phone')}</label>
                 <input type="text" value={clientForm.phone} onChange={(e) => handleClientChange('phone', e.target.value)} />
-                <label>Case type</label>
+                <label>{t('clients_caseType')}</label>
                 <input type="text" value={clientForm.case_type} onChange={(e) => handleClientChange('case_type', e.target.value)} />
                 {clientError && <p className="auth-error">{clientError}</p>}
                 <button className="btn-primary" disabled={clientLoading} onClick={addClient}>
-                  {clientLoading ? 'Saving…' : 'Save client'}
+                  {clientLoading ? t('clients_saving') : t('clients_save')}
                 </button>
               </div>
 
               <div className="client-panel">
-                <h3>Client list</h3>
+                <h3>{t('clients_listTitle')}</h3>
                 {clients.length === 0 ? (
-                  <p>No clients yet.</p>
+                  <p>{t('clients_noClients')}</p>
                 ) : (
                   <ul className="client-list">
                     {clients.map((client) => (
@@ -524,7 +595,7 @@ function AppShell() {
                           <div>{client.phone}</div>
                         </div>
                         <button className="danger" onClick={() => removeClient(client.id)}>
-                          Delete
+                          {t('clients_delete')}
                         </button>
                       </li>
                     ))}
@@ -539,16 +610,16 @@ function AppShell() {
           <section className="clients-page">
             <div className="page-header">
               <div>
-                <span className="section-label">API Keys</span>
-                <h2>API keys</h2>
-                <p>Create and manage keys for accessing the LawScribe API programmatically.</p>
+                <span className="section-label">{t('keys_label')}</span>
+                <h2>{t('keys_title')}</h2>
+                <p>{t('keys_subtitle')}</p>
               </div>
             </div>
 
             <div className="clients-grid">
               <div className="client-panel">
-                <h3>Create a new key</h3>
-                <label>Key name</label>
+                <h3>{t('keys_createTitle')}</h3>
+                <label>{t('keys_nameLabel')}</label>
                 <input
                   type="text"
                   placeholder="Default key"
@@ -557,28 +628,25 @@ function AppShell() {
                 />
                 {apiKeyError && <p className="auth-error">{apiKeyError}</p>}
                 <button className="btn-primary" disabled={apiKeyLoading} onClick={createApiKey}>
-                  {apiKeyLoading ? 'Creating…' : 'Create key'}
+                  {apiKeyLoading ? t('keys_creating') : t('keys_create')}
                 </button>
 
                 {justCreatedKey && (
                   <div className="output-panel">
-                    <h4>Copy your new key now</h4>
-                    <p>
-                      This is the only time the full key is shown. Store it somewhere safe — you won't be able to
-                      view it again.
-                    </p>
+                    <h4>{t('keys_copyNowTitle')}</h4>
+                    <p>{t('keys_copyNowBody')}</p>
                     <p className="api-key-value">{justCreatedKey.fullKey}</p>
                     <button className="btn-secondary" onClick={copyApiKey}>
-                      {copied ? 'Copied!' : 'Copy to clipboard'}
+                      {copied ? t('keys_copied') : t('keys_copy')}
                     </button>
                   </div>
                 )}
               </div>
 
               <div className="client-panel">
-                <h3>Your keys</h3>
+                <h3>{t('keys_yourKeys')}</h3>
                 {apiKeys.length === 0 ? (
-                  <p>No API keys yet.</p>
+                  <p>{t('keys_noKeys')}</p>
                 ) : (
                   <ul className="client-list">
                     {apiKeys.map((key) => (
@@ -586,9 +654,15 @@ function AppShell() {
                         <div>
                           <strong>{key.name}</strong>
                           <div>{key.key_prefix}…</div>
-                          <div>Created {formatDate(key.created_at)}</div>
-                          <div>Last used {formatDate(key.last_used_at)}</div>
-                          <div>{key.revoked_at ? `Revoked ${formatDate(key.revoked_at)}` : 'Active'}</div>
+                          <div>
+                            {t('keys_created')} {formatDate(key.created_at)}
+                          </div>
+                          <div>
+                            {t('keys_lastUsed')} {formatDate(key.last_used_at)}
+                          </div>
+                          <div>
+                            {key.revoked_at ? `${t('keys_revoked')} ${formatDate(key.revoked_at)}` : t('keys_active')}
+                          </div>
                         </div>
                         {!key.revoked_at && (
                           <button
@@ -596,7 +670,7 @@ function AppShell() {
                             disabled={revokingKeyId === key.id}
                             onClick={() => revokeApiKey(key.id)}
                           >
-                            {revokingKeyId === key.id ? 'Revoking…' : 'Revoke'}
+                            {revokingKeyId === key.id ? t('keys_revoking') : t('keys_revoke')}
                           </button>
                         )}
                       </li>
