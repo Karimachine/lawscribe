@@ -1024,6 +1024,21 @@ button {
   margin-bottom: 0.2rem;
 }
 
+.client-list li.revoked {
+  opacity: 0.55;
+}
+
+.key-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--border);
+  color: var(--muted);
+}
+
 .danger {
   border: 1px solid rgba(164, 35, 35, 0.25);
   background: transparent;

@@ -38,11 +38,15 @@ function AppShell() {
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyError, setApiKeyError] = useState('');
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [keysLoading, setKeysLoading] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState(null);
   const [justCreatedKey, setJustCreatedKey] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [revokeError, setRevokeError] = useState(null);
+  const [revokeSuccessId, setRevokeSuccessId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
+  const revokeSuccessTimeoutRef = useRef(null);
 
   const loadSavedDocs = async (token) => {
     try {
@@ -93,6 +97,7 @@ function AppShell() {
   };
 
   const loadApiKeys = async (token) => {
+    setKeysLoading(true);
     try {
       const response = await fetch('/api/keys', {
         headers: {
@@ -105,6 +110,8 @@ function AppShell() {
       }
     } catch (error) {
       console.error('Failed to load API keys', error);
+    } finally {
+      setKeysLoading(false);
     }
   };
 
@@ -141,6 +148,8 @@ function AppShell() {
         setStats({ documentsCount: 0, clientsCount: 0 });
         setApiKeys([]);
         setJustCreatedKey(null);
+        setRevokeError(null);
+        setRevokeSuccessId(null);
       }
     });
 
@@ -171,6 +180,39 @@ function AppShell() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsOpen]);
+
+  // Warn on tab close/refresh while a newly-generated key hasn't been
+  // dismissed yet -- it can never be retrieved again after this point.
+  useEffect(() => {
+    if (!justCreatedKey) return;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [justCreatedKey]);
+
+  useEffect(
+    () => () => {
+      if (revokeSuccessTimeoutRef.current) {
+        clearTimeout(revokeSuccessTimeoutRef.current);
+      }
+    },
+    []
+  );
+
+  // In-app navigation (nav bar) unmounts AppShell and loses justCreatedKey
+  // just as surely as leaving the tab -- gate it the same way.
+  const guardedNavigate = (path) => {
+    if (justCreatedKey && !window.confirm(t('keys_unsavedKeyWarning'))) {
+      return;
+    }
+    navigate(path);
+  };
 
   const activeDocButton = (doc) => {
     setActiveDoc(doc);
@@ -205,6 +247,10 @@ function AppShell() {
   };
 
   const signOut = async () => {
+    if (justCreatedKey && !window.confirm(t('keys_unsavedKeyWarning'))) {
+      return;
+    }
+
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);
@@ -213,6 +259,8 @@ function AppShell() {
     setStats({ documentsCount: 0, clientsCount: 0 });
     setApiKeys([]);
     setJustCreatedKey(null);
+    setRevokeError(null);
+    setRevokeSuccessId(null);
     setSettingsOpen(false);
     navigate('/login');
   };
@@ -320,6 +368,12 @@ function AppShell() {
   };
 
   const removeClient = async (id) => {
+    // Separate from the API keys confirm-before-revoke work below -- same
+    // gap, flagged by the same audit, applied consistently here.
+    if (!window.confirm(t('clients_confirmDelete'))) {
+      return;
+    }
+
     if (!session?.access_token) {
       return;
     }
@@ -341,6 +395,11 @@ function AppShell() {
   };
 
   const createApiKey = async () => {
+    if (justCreatedKey) {
+      setApiKeyError(t('keys_dismissFirst'));
+      return;
+    }
+
     if (!session?.access_token) {
       setApiKeyError('Please sign in to create API keys.');
       return;
@@ -348,8 +407,6 @@ function AppShell() {
 
     setApiKeyLoading(true);
     setApiKeyError('');
-    setJustCreatedKey(null);
-    setCopied(false);
 
     try {
       const response = await fetch('/api/keys', {
@@ -382,7 +439,16 @@ function AppShell() {
       return;
     }
 
+    if (!window.confirm(t('keys_confirmRevoke'))) {
+      return;
+    }
+
     setRevokingKeyId(id);
+    setRevokeError(null);
+    setRevokeSuccessId(null);
+    if (revokeSuccessTimeoutRef.current) {
+      clearTimeout(revokeSuccessTimeoutRef.current);
+    }
 
     try {
       const response = await fetch(`/api/keys/${id}`, {
@@ -391,14 +457,21 @@ function AppShell() {
           Authorization: `Bearer ${session.access_token}`
         }
       });
-      if (response.ok) {
-        if (justCreatedKey?.id === id) {
-          setJustCreatedKey(null);
-        }
-        await loadApiKeys(session.access_token);
+
+      if (!response.ok) {
+        throw new Error('Failed to revoke API key');
       }
+
+      if (justCreatedKey?.id === id) {
+        setJustCreatedKey(null);
+      }
+
+      setRevokeSuccessId(id);
+      revokeSuccessTimeoutRef.current = setTimeout(() => setRevokeSuccessId(null), 3000);
+      await loadApiKeys(session.access_token);
     } catch (error) {
       console.error('Failed to revoke API key', error);
+      setRevokeError({ id, message: t('keys_revokeErrorGeneric') });
     } finally {
       setRevokingKeyId(null);
     }
@@ -424,17 +497,17 @@ function AppShell() {
   return (
     <div className="app-shell">
       <nav className="nav">
-        <button className="nav-logo" onClick={() => navigate('/app')}>
+        <button className="nav-logo" onClick={() => guardedNavigate('/app')}>
           Law<span>Scribe</span>
         </button>
         <div className="nav-links">
-          <button className="nav-link" onClick={() => navigate('/app')}>
+          <button className="nav-link" onClick={() => guardedNavigate('/app')}>
             {t('nav_dashboard')}
           </button>
-          <button className="nav-link" onClick={() => navigate('/app/clients')}>
+          <button className="nav-link" onClick={() => guardedNavigate('/app/clients')}>
             {t('nav_clients')}
           </button>
-          <button className="nav-link" onClick={() => navigate('/app/keys')}>
+          <button className="nav-link" onClick={() => guardedNavigate('/app/keys')}>
             {t('nav_apiKeys')}
           </button>
           {user ? (
@@ -668,10 +741,12 @@ function AppShell() {
                   type="text"
                   placeholder="Default key"
                   value={apiKeyName}
+                  maxLength={50}
                   onChange={(e) => setApiKeyName(e.target.value)}
+                  disabled={!!justCreatedKey}
                 />
                 {apiKeyError && <p className="auth-error">{apiKeyError}</p>}
-                <button className="btn-primary" disabled={apiKeyLoading} onClick={createApiKey}>
+                <button className="btn-primary" disabled={apiKeyLoading || !!justCreatedKey} onClick={createApiKey}>
                   {apiKeyLoading ? t('keys_creating') : t('keys_create')}
                 </button>
 
@@ -680,21 +755,34 @@ function AppShell() {
                     <h4>{t('keys_copyNowTitle')}</h4>
                     <p>{t('keys_copyNowBody')}</p>
                     <p className="api-key-value">{justCreatedKey.fullKey}</p>
-                    <button className="btn-secondary" onClick={copyApiKey}>
-                      {copied ? t('keys_copied') : t('keys_copy')}
-                    </button>
+                    <div className="auth-actions">
+                      <button className="btn-secondary" onClick={copyApiKey}>
+                        {copied ? t('keys_copied') : t('keys_copy')}
+                      </button>
+                      <button
+                        className="btn-primary"
+                        onClick={() => {
+                          setJustCreatedKey(null);
+                          setCopied(false);
+                        }}
+                      >
+                        {t('keys_doneCopied')}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
               <div className="client-panel">
                 <h3>{t('keys_yourKeys')}</h3>
-                {apiKeys.length === 0 ? (
+                {keysLoading ? (
+                  <p>{t('keys_loading')}</p>
+                ) : apiKeys.length === 0 ? (
                   <p>{t('keys_noKeys')}</p>
                 ) : (
                   <ul className="client-list">
                     {apiKeys.map((key) => (
-                      <li key={key.id}>
+                      <li key={key.id} className={key.revoked_at ? 'revoked' : ''}>
                         <div>
                           <strong>{key.name}</strong>
                           <div>{key.key_prefix}…</div>
@@ -705,8 +793,16 @@ function AppShell() {
                             {t('keys_lastUsed')} {formatDate(key.last_used_at)}
                           </div>
                           <div>
-                            {key.revoked_at ? `${t('keys_revoked')} ${formatDate(key.revoked_at)}` : t('keys_active')}
+                            {key.revoked_at ? (
+                              <>
+                                <span className="key-badge">{t('keys_revoked')}</span> {formatDate(key.revoked_at)}
+                              </>
+                            ) : (
+                              t('keys_active')
+                            )}
                           </div>
+                          {revokeError?.id === key.id && <p className="auth-error">{revokeError.message}</p>}
+                          {revokeSuccessId === key.id && <p className="save-success">{t('keys_revokeSuccess')}</p>}
                         </div>
                         {!key.revoked_at && (
                           <button

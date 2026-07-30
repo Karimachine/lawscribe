@@ -50,6 +50,7 @@ export const translations = {
     clients_listTitle: 'Client list',
     clients_noClients: 'No clients yet.',
     clients_delete: 'Delete',
+    clients_confirmDelete: 'Are you sure you want to delete this client? This cannot be undone.',
 
     keys_label: 'API Keys',
     keys_title: 'API keys',
@@ -70,6 +71,14 @@ export const translations = {
     keys_revoked: 'Revoked',
     keys_revoke: 'Revoke',
     keys_revoking: 'Revoking…',
+    keys_loading: 'Loading keys…',
+    keys_doneCopied: "Done, I've copied it",
+    keys_dismissFirst: 'Please copy and dismiss your current key before generating a new one.',
+    keys_unsavedKeyWarning:
+      "You haven't confirmed you've copied your new API key. If you leave now, you won't be able to see it again. Leave anyway?",
+    keys_confirmRevoke: 'Are you sure you want to revoke this API key? This cannot be undone.',
+    keys_revokeErrorGeneric: 'Unable to revoke this key. Please try again.',
+    keys_revokeSuccess: 'Key revoked.',
 
     settings_title: 'Settings',
     settings_account: 'Account',
@@ -126,6 +135,7 @@ export const translations = {
     clients_listTitle: 'Lista de clientes',
     clients_noClients: 'Aún no hay clientes.',
     clients_delete: 'Eliminar',
+    clients_confirmDelete: '¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.',
 
     keys_label: 'Claves API',
     keys_title: 'Claves API',
@@ -146,6 +156,14 @@ export const translations = {
     keys_revoked: 'Revocada',
     keys_revoke: 'Revocar',
     keys_revoking: 'Revocando…',
+    keys_loading: 'Cargando claves…',
+    keys_doneCopied: 'Listo, ya la copié',
+    keys_dismissFirst: 'Copia y cierra tu clave actual antes de generar una nueva.',
+    keys_unsavedKeyWarning:
+      'No has confirmado que copiaste tu nueva clave API. Si sales ahora, no podrás volver a verla. ¿Salir de todos modos?',
+    keys_confirmRevoke: '¿Estás seguro de que quieres revocar esta clave API? Esta acción no se puede deshacer.',
+    keys_revokeErrorGeneric: 'No se pudo revocar esta clave. Inténtalo de nuevo.',
+    keys_revokeSuccess: 'Clave revocada.',
 
     settings_title: 'Ajustes',
     settings_account: 'Cuenta',
