@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
 import AppShell from './pages/AppShell';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/login" element={<AppShell />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/app" element={<AppShell />} />
         <Route path="/app/clients" element={<AppShell />} />
         <Route path="/app/keys" element={<AppShell />} />

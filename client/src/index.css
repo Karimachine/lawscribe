@@ -651,6 +651,44 @@ button {
   background: var(--paper);
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 4rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.password-toggle:hover {
+  color: var(--ink);
+}
+
+.forgot-password-row {
+  text-align: right;
+  margin-top: 0.4rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gold);
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+
 .auth-actions {
   display: flex;
   gap: 1rem;

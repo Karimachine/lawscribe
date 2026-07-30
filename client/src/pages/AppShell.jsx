@@ -5,6 +5,7 @@ import { docTypes } from '../lib/docTypes';
 import { generateDocument } from '../lib/generateDocument';
 import { usePreferences } from '../context/PreferencesContext';
 import { languageOptions } from '../lib/translations';
+import PasswordInput from '../components/shared/PasswordInput';
 
 // The authenticated app (dashboard, clients, API keys, and the sign in /
 // sign up form). Business logic here is unchanged from the original
@@ -31,6 +32,11 @@ function AppShell() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
   const [clientError, setClientError] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
@@ -244,6 +250,40 @@ function AppShell() {
       setAuthError(error.message);
     }
     setAuthLoading(false);
+  };
+
+  const openForgotPassword = () => {
+    setResetEmail(form.email);
+    setResetError('');
+    setResetSuccess(false);
+    setShowForgotPassword(true);
+  };
+
+  const closeForgotPassword = () => {
+    setShowForgotPassword(false);
+    setResetError('');
+    setResetSuccess(false);
+  };
+
+  const requestPasswordReset = async () => {
+    setResetLoading(true);
+    setResetError('');
+    setResetSuccess(false);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (error) throw error;
+      // Generic wording regardless of outcome -- never confirms or denies
+      // whether an account exists for the submitted email.
+      setResetSuccess(true);
+    } catch (error) {
+      console.error('Failed to request password reset', error);
+      setResetError(t('login_resetErrorGeneric'));
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const signOut = async () => {
@@ -526,20 +566,62 @@ function AppShell() {
         {isLoginPage && (
           <section className="auth-section">
             <div className="auth-panel">
-              <h2>{t('login_title')}</h2>
-              <label>{t('login_email')}</label>
-              <input type="email" value={form.email} onChange={(e) => handleAuthChange('email', e.target.value)} />
-              <label>{t('login_password')}</label>
-              <input type="password" value={form.password} onChange={(e) => handleAuthChange('password', e.target.value)} />
-              {authError && <p className="auth-error">{authError}</p>}
-              <div className="auth-actions">
-                <button disabled={authLoading} onClick={signIn}>
-                  {authLoading ? t('login_signingIn') : t('login_signIn')}
-                </button>
-                <button disabled={authLoading} className="secondary" onClick={signUp}>
-                  {authLoading ? t('login_registering') : t('login_createAccount')}
-                </button>
-              </div>
+              {!showForgotPassword ? (
+                <>
+                  <h2>{t('login_title')}</h2>
+                  <label>{t('login_email')}</label>
+                  <input type="email" value={form.email} onChange={(e) => handleAuthChange('email', e.target.value)} />
+                  <label>{t('login_password')}</label>
+                  <PasswordInput
+                    value={form.password}
+                    onChange={(e) => handleAuthChange('password', e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <div className="forgot-password-row">
+                    <button type="button" className="link-button" onClick={openForgotPassword}>
+                      {t('login_forgotPassword')}
+                    </button>
+                  </div>
+                  {authError && <p className="auth-error">{authError}</p>}
+                  <div className="auth-actions">
+                    <button disabled={authLoading} onClick={signIn}>
+                      {authLoading ? t('login_signingIn') : t('login_signIn')}
+                    </button>
+                    <button disabled={authLoading} className="secondary" onClick={signUp}>
+                      {authLoading ? t('login_registering') : t('login_createAccount')}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2>{t('login_forgotTitle')}</h2>
+                  <p>{t('login_forgotSubtitle')}</p>
+                  {!resetSuccess ? (
+                    <>
+                      <label>{t('login_email')}</label>
+                      <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} />
+                      {resetError && <p className="auth-error">{resetError}</p>}
+                      <div className="auth-actions">
+                        <button disabled={resetLoading} onClick={requestPasswordReset}>
+                          {resetLoading ? t('login_sendingReset') : t('login_sendReset')}
+                        </button>
+                        <button className="secondary" onClick={closeForgotPassword}>
+                          {t('login_backToSignIn')}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="save-success">{t('login_resetSent')}</p>
+                      <div className="auth-actions">
+                        <button className="secondary" onClick={closeForgotPassword}>
+                          {t('login_backToSignIn')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </section>
         )}
