@@ -51,6 +51,7 @@ function AppShell() {
   const [revokeError, setRevokeError] = useState(null);
   const [revokeSuccessId, setRevokeSuccessId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const settingsRef = useRef(null);
   const revokeSuccessTimeoutRef = useRef(null);
 
@@ -211,9 +212,12 @@ function AppShell() {
     []
   );
 
+  const closeMobileNav = () => setMobileNavOpen(false);
+
   // In-app navigation (nav bar) unmounts AppShell and loses justCreatedKey
   // just as surely as leaving the tab -- gate it the same way.
   const guardedNavigate = (path) => {
+    closeMobileNav();
     if (justCreatedKey && !window.confirm(t('keys_unsavedKeyWarning'))) {
       return;
     }
@@ -287,6 +291,8 @@ function AppShell() {
   };
 
   const signOut = async () => {
+    closeMobileNav();
+
     if (justCreatedKey && !window.confirm(t('keys_unsavedKeyWarning'))) {
       return;
     }
@@ -540,7 +546,20 @@ function AppShell() {
         <button className="nav-logo" onClick={() => guardedNavigate('/app')}>
           Law<span>Scribe</span>
         </button>
-        <div className="nav-links">
+
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        <div className={`nav-links ${mobileNavOpen ? 'open' : ''}`}>
           <button className="nav-link" onClick={() => guardedNavigate('/app')}>
             {t('nav_dashboard')}
           </button>
@@ -555,7 +574,13 @@ function AppShell() {
               {t('nav_signOut')}
             </button>
           ) : (
-            <button className="nav-cta" onClick={() => navigate('/login')}>
+            <button
+              className="nav-cta"
+              onClick={() => {
+                closeMobileNav();
+                navigate('/login');
+              }}
+            >
               {t('nav_signIn')}
             </button>
           )}
