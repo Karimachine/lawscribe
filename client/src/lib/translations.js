@@ -140,7 +140,48 @@ export const translations = {
     settings_signedInAs: 'Signed in as',
     settings_appearance: 'Appearance',
     settings_darkMode: 'Dark mode',
-    settings_language: 'Language'
+    settings_language: 'Language',
+
+    settings_changePassword: 'Change password',
+    settings_currentPassword: 'Current password',
+    settings_newPassword: 'New password',
+    settings_confirmNewPassword: 'Confirm new password',
+    settings_changePasswordButton: 'Update password',
+    settings_changingPassword: 'Updating…',
+    settings_passwordTooShort: 'New password must be at least 8 characters.',
+    settings_passwordsDontMatch: "New passwords don't match.",
+    settings_currentPasswordIncorrect: 'Current password is incorrect.',
+    settings_changePasswordErrorGeneric: 'Unable to update password. Please try again.',
+    settings_changePasswordSuccess: 'Password updated successfully.',
+
+    settings_changeEmail: 'Change email',
+    settings_newEmail: 'New email',
+    settings_changeEmailButton: 'Update email',
+    settings_changingEmail: 'Updating…',
+    settings_changeEmailErrorGeneric: 'Unable to update email. Please try again.',
+    settings_changeEmailSuccess: 'Check your new email address to confirm the change.',
+
+    settings_dangerZone: 'Danger Zone',
+    settings_deleteAccountBody:
+      'Permanently delete your account and all your clients, documents, and API keys. This cannot be undone.',
+    settings_deleteAccountConfirmLabel: 'Type DELETE to confirm',
+    settings_deleteAccountButton: 'Delete my account',
+    settings_deletingAccount: 'Deleting…',
+    settings_deleteAccountErrorGeneric: 'Unable to delete account. Please try again.',
+
+    accountDeleted_title: 'Your account has been deleted',
+    accountDeleted_body: "We're sorry to see you go. All your data has been permanently removed.",
+    accountDeleted_backHome: 'Back to home',
+
+    errorBoundary_title: 'Something went wrong',
+    errorBoundary_body: 'We hit an unexpected error. Try reloading the page, or head back to the dashboard.',
+    errorBoundary_reload: 'Reload page',
+    errorBoundary_goHome: 'Back to dashboard',
+
+    notFound_title: 'Page not found',
+    notFound_body: "The page you're looking for doesn't exist or has been moved.",
+    notFound_backHome: 'Back to home',
+    notFound_goToDashboard: 'Go to dashboard'
   },
   es: {
     common_cancel: 'Cancelar',
@@ -280,7 +321,48 @@ export const translations = {
     settings_signedInAs: 'Sesión iniciada como',
     settings_appearance: 'Apariencia',
     settings_darkMode: 'Modo oscuro',
-    settings_language: 'Idioma'
+    settings_language: 'Idioma',
+
+    settings_changePassword: 'Cambiar contraseña',
+    settings_currentPassword: 'Contraseña actual',
+    settings_newPassword: 'Nueva contraseña',
+    settings_confirmNewPassword: 'Confirmar nueva contraseña',
+    settings_changePasswordButton: 'Actualizar contraseña',
+    settings_changingPassword: 'Actualizando…',
+    settings_passwordTooShort: 'La nueva contraseña debe tener al menos 8 caracteres.',
+    settings_passwordsDontMatch: 'Las nuevas contraseñas no coinciden.',
+    settings_currentPasswordIncorrect: 'La contraseña actual es incorrecta.',
+    settings_changePasswordErrorGeneric: 'No se pudo actualizar la contraseña. Inténtalo de nuevo.',
+    settings_changePasswordSuccess: 'Contraseña actualizada correctamente.',
+
+    settings_changeEmail: 'Cambiar correo electrónico',
+    settings_newEmail: 'Nuevo correo electrónico',
+    settings_changeEmailButton: 'Actualizar correo electrónico',
+    settings_changingEmail: 'Actualizando…',
+    settings_changeEmailErrorGeneric: 'No se pudo actualizar el correo electrónico. Inténtalo de nuevo.',
+    settings_changeEmailSuccess: 'Revisa tu nuevo correo electrónico para confirmar el cambio.',
+
+    settings_dangerZone: 'Zona de peligro',
+    settings_deleteAccountBody:
+      'Elimina permanentemente tu cuenta y todos tus clientes, documentos y claves API. Esta acción no se puede deshacer.',
+    settings_deleteAccountConfirmLabel: 'Escribe DELETE para confirmar',
+    settings_deleteAccountButton: 'Eliminar mi cuenta',
+    settings_deletingAccount: 'Eliminando…',
+    settings_deleteAccountErrorGeneric: 'No se pudo eliminar la cuenta. Inténtalo de nuevo.',
+
+    accountDeleted_title: 'Tu cuenta ha sido eliminada',
+    accountDeleted_body: 'Lamentamos verte partir. Todos tus datos se han eliminado permanentemente.',
+    accountDeleted_backHome: 'Volver al inicio',
+
+    errorBoundary_title: 'Algo salió mal',
+    errorBoundary_body: 'Ocurrió un error inesperado. Intenta recargar la página o vuelve al panel.',
+    errorBoundary_reload: 'Recargar página',
+    errorBoundary_goHome: 'Volver al panel',
+
+    notFound_title: 'Página no encontrada',
+    notFound_body: 'La página que buscas no existe o fue movida.',
+    notFound_backHome: 'Volver al inicio',
+    notFound_goToDashboard: 'Ir al panel'
   }
 };
 

@@ -75,10 +75,26 @@ function AppShell() {
   const [revokeSuccessId, setRevokeSuccessId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState(false);
+  const [newEmailValue, setNewEmailValue] = useState('');
+  const [changeEmailError, setChangeEmailError] = useState('');
+  const [changeEmailLoading, setChangeEmailLoading] = useState(false);
+  const [changeEmailSuccess, setChangeEmailSuccess] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
   const settingsRef = useRef(null);
   const revokeSuccessTimeoutRef = useRef(null);
   const clientSuccessTimeoutRef = useRef(null);
   const docUpdateSuccessTimeoutRef = useRef(null);
+  const changePasswordSuccessTimeoutRef = useRef(null);
   const clientsListRef = useRef(null);
   const documentsListRef = useRef(null);
 
@@ -395,6 +411,100 @@ function AppShell() {
     setDocUpdateSuccessId(null);
     setSettingsOpen(false);
     navigate('/login');
+  };
+
+  const changePassword = async () => {
+    setChangePasswordError('');
+    setChangePasswordSuccess(false);
+
+    if (changePasswordForm.newPassword.length < 8) {
+      setChangePasswordError(t('settings_passwordTooShort'));
+      return;
+    }
+
+    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+      setChangePasswordError(t('settings_passwordsDontMatch'));
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: changePasswordForm.currentPassword
+      });
+      if (signInError) {
+        setChangePasswordError(t('settings_currentPasswordIncorrect'));
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: changePasswordForm.newPassword });
+      if (updateError) throw updateError;
+
+      setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setChangePasswordSuccess(true);
+      if (changePasswordSuccessTimeoutRef.current) {
+        clearTimeout(changePasswordSuccessTimeoutRef.current);
+      }
+      changePasswordSuccessTimeoutRef.current = setTimeout(() => setChangePasswordSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to change password', error);
+      setChangePasswordError(t('settings_changePasswordErrorGeneric'));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
+  const changeEmail = async () => {
+    setChangeEmailError('');
+    setChangeEmailSuccess(false);
+
+    if (!newEmailValue.trim()) {
+      setChangeEmailError(t('settings_changeEmailErrorGeneric'));
+      return;
+    }
+
+    setChangeEmailLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmailValue.trim() });
+      if (error) throw error;
+
+      setNewEmailValue('');
+      setChangeEmailSuccess(true);
+    } catch (error) {
+      console.error('Failed to change email', error);
+      setChangeEmailError(t('settings_changeEmailErrorGeneric'));
+    } finally {
+      setChangeEmailLoading(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE' || !session?.access_token || deleteAccountLoading) {
+      return;
+    }
+
+    setDeleteAccountLoading(true);
+    setDeleteAccountError('');
+    try {
+      const response = await fetch('/api/account/delete', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete account');
+      }
+
+      await supabase.auth.signOut();
+      navigate('/account-deleted');
+    } catch (error) {
+      console.error('Failed to delete account', error);
+      setDeleteAccountError(t('settings_deleteAccountErrorGeneric'));
+      setDeleteAccountLoading(false);
+    }
   };
 
   const generateDoc = async () => {
@@ -919,6 +1029,52 @@ function AppShell() {
                     </div>
 
                     <div className="settings-section">
+                      <h4>{t('settings_changePassword')}</h4>
+                      <label>{t('settings_currentPassword')}</label>
+                      <PasswordInput
+                        value={changePasswordForm.currentPassword}
+                        onChange={(e) =>
+                          setChangePasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))
+                        }
+                        autoComplete="current-password"
+                      />
+                      <label>{t('settings_newPassword')}</label>
+                      <PasswordInput
+                        value={changePasswordForm.newPassword}
+                        onChange={(e) => setChangePasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                        autoComplete="new-password"
+                      />
+                      <label>{t('settings_confirmNewPassword')}</label>
+                      <PasswordInput
+                        value={changePasswordForm.confirmPassword}
+                        onChange={(e) =>
+                          setChangePasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                        }
+                        autoComplete="new-password"
+                      />
+                      {changePasswordError && <p className="auth-error">{changePasswordError}</p>}
+                      {changePasswordSuccess && <p className="save-success">{t('settings_changePasswordSuccess')}</p>}
+                      <div className="auth-actions">
+                        <button disabled={changePasswordLoading} onClick={changePassword}>
+                          {changePasswordLoading ? t('settings_changingPassword') : t('settings_changePasswordButton')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
+                      <h4>{t('settings_changeEmail')}</h4>
+                      <label>{t('settings_newEmail')}</label>
+                      <input type="email" value={newEmailValue} onChange={(e) => setNewEmailValue(e.target.value)} />
+                      {changeEmailError && <p className="auth-error">{changeEmailError}</p>}
+                      {changeEmailSuccess && <p className="save-success">{t('settings_changeEmailSuccess')}</p>}
+                      <div className="auth-actions">
+                        <button disabled={changeEmailLoading} onClick={changeEmail}>
+                          {changeEmailLoading ? t('settings_changingEmail') : t('settings_changeEmailButton')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
                       <h4>{t('settings_appearance')}</h4>
                       <div className="settings-row">
                         <span>{t('settings_darkMode')}</span>
@@ -942,6 +1098,27 @@ function AppShell() {
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    <div className="settings-section settings-danger-zone">
+                      <h4>{t('settings_dangerZone')}</h4>
+                      <p>{t('settings_deleteAccountBody')}</p>
+                      <label>{t('settings_deleteAccountConfirmLabel')}</label>
+                      <input
+                        type="text"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      />
+                      {deleteAccountError && <p className="auth-error">{deleteAccountError}</p>}
+                      <div className="auth-actions">
+                        <button
+                          className="danger"
+                          disabled={deleteConfirmText !== 'DELETE' || deleteAccountLoading}
+                          onClick={deleteAccount}
+                        >
+                          {deleteAccountLoading ? t('settings_deletingAccount') : t('settings_deleteAccountButton')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
