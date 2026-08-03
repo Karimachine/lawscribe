@@ -27,8 +27,15 @@ function AppShell() {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [savedDocs, setSavedDocs] = useState([]);
+  const [documentsError, setDocumentsError] = useState('');
+  const [documentsLoading, setDocumentsLoading] = useState(false);
   const [clients, setClients] = useState([]);
+  const [clientsError, setClientsError] = useState('');
+  const [clientsLoading, setClientsLoading] = useState(false);
   const [stats, setStats] = useState({ documentsCount: 0, clientsCount: 0 });
+  const [statsError, setStatsError] = useState('');
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [keysError, setKeysError] = useState('');
   const [form, setForm] = useState({ email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -68,6 +75,8 @@ function AppShell() {
   const docUpdateSuccessTimeoutRef = useRef(null);
 
   const loadSavedDocs = async (token) => {
+    setDocumentsLoading(true);
+    setDocumentsError('');
     try {
       const response = await fetch('/api/documents', {
         headers: {
@@ -77,13 +86,20 @@ function AppShell() {
       if (response.ok) {
         const data = await response.json();
         setSavedDocs(data);
+      } else {
+        setDocumentsError(t('dashboard_loadDocsErrorGeneric'));
       }
     } catch (error) {
       console.error('Failed to load saved documents', error);
+      setDocumentsError(t('dashboard_loadDocsErrorGeneric'));
+    } finally {
+      setDocumentsLoading(false);
     }
   };
 
   const loadClients = async (token) => {
+    setClientsLoading(true);
+    setClientsError('');
     try {
       const response = await fetch('/api/clients', {
         headers: {
@@ -93,13 +109,20 @@ function AppShell() {
       if (response.ok) {
         const data = await response.json();
         setClients(data);
+      } else {
+        setClientsError(t('clients_loadErrorGeneric'));
       }
     } catch (error) {
       console.error('Failed to load clients', error);
+      setClientsError(t('clients_loadErrorGeneric'));
+    } finally {
+      setClientsLoading(false);
     }
   };
 
   const loadStats = async (token) => {
+    setStatsLoading(true);
+    setStatsError('');
     try {
       const response = await fetch('/api/stats', {
         headers: {
@@ -109,14 +132,20 @@ function AppShell() {
       if (response.ok) {
         const data = await response.json();
         setStats({ documentsCount: data.documentsCount ?? 0, clientsCount: data.clientsCount ?? 0 });
+      } else {
+        setStatsError(t('dashboard_loadStatsErrorGeneric'));
       }
     } catch (error) {
       console.error('Failed to load stats', error);
+      setStatsError(t('dashboard_loadStatsErrorGeneric'));
+    } finally {
+      setStatsLoading(false);
     }
   };
 
   const loadApiKeys = async (token) => {
     setKeysLoading(true);
+    setKeysError('');
     try {
       const response = await fetch('/api/keys', {
         headers: {
@@ -126,9 +155,12 @@ function AppShell() {
       if (response.ok) {
         const data = await response.json();
         setApiKeys(data.keys || []);
+      } else {
+        setKeysError(t('keys_loadErrorGeneric'));
       }
     } catch (error) {
       console.error('Failed to load API keys', error);
+      setKeysError(t('keys_loadErrorGeneric'));
     } finally {
       setKeysLoading(false);
     }
@@ -163,9 +195,13 @@ function AppShell() {
         ]);
       } else {
         setSavedDocs([]);
+        setDocumentsError('');
         setClients([]);
+        setClientsError('');
         setStats({ documentsCount: 0, clientsCount: 0 });
+        setStatsError('');
         setApiKeys([]);
+        setKeysError('');
         setJustCreatedKey(null);
         setRevokeError(null);
         setRevokeSuccessId(null);
@@ -323,9 +359,13 @@ function AppShell() {
     setSession(null);
     setUser(null);
     setSavedDocs([]);
+    setDocumentsError('');
     setClients([]);
+    setClientsError('');
     setStats({ documentsCount: 0, clientsCount: 0 });
+    setStatsError('');
     setApiKeys([]);
+    setKeysError('');
     setJustCreatedKey(null);
     setRevokeError(null);
     setRevokeSuccessId(null);
@@ -870,16 +910,27 @@ function AppShell() {
               </div>
             </div>
 
-            <div className="stats-grid">
-              <div className="stat-card">
-                <h3>{t('dashboard_statDocuments')}</h3>
-                <p>{stats.documentsCount}</p>
+            {statsError ? (
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <p className="auth-error">{statsError}</p>
+                  <button disabled={statsLoading} onClick={() => loadStats(session.access_token)}>
+                    {statsLoading ? t('common_retrying') : t('common_tryAgain')}
+                  </button>
+                </div>
               </div>
-              <div className="stat-card">
-                <h3>{t('dashboard_statClients')}</h3>
-                <p>{stats.clientsCount}</p>
+            ) : (
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <h3>{t('dashboard_statDocuments')}</h3>
+                  <p>{stats.documentsCount}</p>
+                </div>
+                <div className="stat-card">
+                  <h3>{t('dashboard_statClients')}</h3>
+                  <p>{stats.clientsCount}</p>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="dashboard-grid">
               <div className="dashboard-panel">
@@ -922,7 +973,14 @@ function AppShell() {
               </div>
               <div className="dashboard-panel">
                 <h3>{t('dashboard_savedTitle')}</h3>
-                {savedDocs.length === 0 ? (
+                {documentsError ? (
+                  <div>
+                    <p className="auth-error">{documentsError}</p>
+                    <button disabled={documentsLoading} onClick={() => loadSavedDocs(session.access_token)}>
+                      {documentsLoading ? t('common_retrying') : t('common_tryAgain')}
+                    </button>
+                  </div>
+                ) : savedDocs.length === 0 ? (
                   <p>{t('dashboard_noSaved')}</p>
                 ) : (
                   <ul className="client-list">
@@ -1020,7 +1078,14 @@ function AppShell() {
 
               <div className="client-panel">
                 <h3>{t('clients_listTitle')}</h3>
-                {clients.length === 0 ? (
+                {clientsError ? (
+                  <div>
+                    <p className="auth-error">{clientsError}</p>
+                    <button disabled={clientsLoading} onClick={() => loadClients(session.access_token)}>
+                      {clientsLoading ? t('common_retrying') : t('common_tryAgain')}
+                    </button>
+                  </div>
+                ) : clients.length === 0 ? (
                   <p>{t('clients_noClients')}</p>
                 ) : (
                   <ul className="client-list">
@@ -1102,6 +1167,11 @@ function AppShell() {
                 <h3>{t('keys_yourKeys')}</h3>
                 {keysLoading ? (
                   <p>{t('keys_loading')}</p>
+                ) : keysError ? (
+                  <div>
+                    <p className="auth-error">{keysError}</p>
+                    <button onClick={() => loadApiKeys(session.access_token)}>{t('common_tryAgain')}</button>
+                  </div>
                 ) : apiKeys.length === 0 ? (
                   <p>{t('keys_noKeys')}</p>
                 ) : (

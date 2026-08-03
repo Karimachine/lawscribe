@@ -4,6 +4,8 @@
 export const translations = {
   en: {
     common_cancel: 'Cancel',
+    common_tryAgain: 'Try again',
+    common_retrying: 'Retrying…',
 
     nav_dashboard: 'Dashboard',
     nav_clients: 'Clients',
@@ -66,6 +68,8 @@ export const translations = {
     dashboard_nothingToSave: 'Generate a document first before saving.',
     dashboard_savedTitle: 'Saved documents',
     dashboard_noSaved: 'No saved documents yet.',
+    dashboard_loadDocsErrorGeneric: "Couldn't load your saved documents right now. Try refreshing the page.",
+    dashboard_loadStatsErrorGeneric: "Couldn't load your stats right now. Try refreshing the page.",
     dashboard_editDocument: 'Edit',
     dashboard_deleteDocument: 'Delete',
     dashboard_deleting: 'Deleting…',
@@ -93,6 +97,7 @@ export const translations = {
     clients_saveErrorGeneric: 'Unable to save client. Please check your input.',
     clients_listTitle: 'Client list',
     clients_noClients: 'No clients yet.',
+    clients_loadErrorGeneric: "Couldn't load your clients right now. Try refreshing the page.",
     clients_delete: 'Delete',
     clients_confirmDelete: 'Are you sure you want to delete this client? This cannot be undone.',
 
@@ -109,6 +114,7 @@ export const translations = {
     keys_copied: 'Copied!',
     keys_yourKeys: 'Your keys',
     keys_noKeys: 'No API keys yet.',
+    keys_loadErrorGeneric: "Couldn't load your API keys right now. Try refreshing the page.",
     keys_created: 'Created',
     keys_lastUsed: 'Last used',
     keys_active: 'Active',
@@ -133,6 +139,8 @@ export const translations = {
   },
   es: {
     common_cancel: 'Cancelar',
+    common_tryAgain: 'Intentar de nuevo',
+    common_retrying: 'Reintentando…',
 
     nav_dashboard: 'Panel',
     nav_clients: 'Clientes',
@@ -195,6 +203,8 @@ export const translations = {
     dashboard_nothingToSave: 'Genera un documento antes de guardar.',
     dashboard_savedTitle: 'Documentos guardados',
     dashboard_noSaved: 'Aún no hay documentos guardados.',
+    dashboard_loadDocsErrorGeneric: 'No se pudieron cargar tus documentos guardados. Intenta recargar la página.',
+    dashboard_loadStatsErrorGeneric: 'No se pudieron cargar tus estadísticas. Intenta recargar la página.',
     dashboard_editDocument: 'Editar',
     dashboard_deleteDocument: 'Eliminar',
     dashboard_deleting: 'Eliminando…',
@@ -222,6 +232,7 @@ export const translations = {
     clients_saveErrorGeneric: 'No se pudo guardar el cliente. Verifica los datos ingresados.',
     clients_listTitle: 'Lista de clientes',
     clients_noClients: 'Aún no hay clientes.',
+    clients_loadErrorGeneric: 'No se pudieron cargar tus clientes. Intenta recargar la página.',
     clients_delete: 'Eliminar',
     clients_confirmDelete: '¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.',
 
@@ -238,6 +249,7 @@ export const translations = {
     keys_copied: '¡Copiado!',
     keys_yourKeys: 'Tus claves',
     keys_noKeys: 'Aún no hay claves API.',
+    keys_loadErrorGeneric: 'No se pudieron cargar tus claves API. Intenta recargar la página.',
     keys_created: 'Creada',
     keys_lastUsed: 'Último uso',
     keys_active: 'Activa',
