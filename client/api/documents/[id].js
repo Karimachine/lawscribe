@@ -16,22 +16,21 @@ export default async function handler(req, res) {
 
   const { id } = req.query || {};
   if (!id) {
-    return res.status(400).json({ error: 'Client id is required.' });
+    return res.status(400).json({ error: 'Document id is required.' });
   }
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
-    const { name, email, phone, case_type } = req.body || {};
-    if (!name) {
-      return res.status(400).json({ error: 'Name is required.' });
+    const { title, prompt, content } = req.body || {};
+    if (!prompt || !content) {
+      return res.status(400).json({ error: 'Prompt and content are required.' });
     }
 
     const { data, error } = await supabase
-      .from('clients')
+      .from('documents')
       .update({
-        name,
-        email: email || null,
-        phone: phone || null,
-        case_type: case_type || null
+        title: title || 'Generated Document',
+        prompt,
+        content
       })
       .eq('id', id)
       .eq('user_id', user.id)
@@ -40,7 +39,7 @@ export default async function handler(req, res) {
 
     if (error || !data) {
       console.error('Supabase update error:', error);
-      return res.status(404).json({ error: 'Client not found' });
+      return res.status(404).json({ error: 'Document not found' });
     }
 
     return res.status(200).json(data);
@@ -48,7 +47,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     const { error } = await supabase
-      .from('clients')
+      .from('documents')
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
@@ -60,7 +59,7 @@ export default async function handler(req, res) {
         details: error.details,
         hint: error.hint
       });
-      return res.status(500).json({ error: 'Unable to delete client' });
+      return res.status(500).json({ error: 'Unable to delete document' });
     }
 
     return res.status(204).end();

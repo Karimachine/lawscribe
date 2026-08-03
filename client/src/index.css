@@ -989,6 +989,7 @@ button {
 }
 
 .dashboard-textarea,
+.dashboard-panel input,
 .client-panel input,
 .auth-panel input {
   width: 100%;

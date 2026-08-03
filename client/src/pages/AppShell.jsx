@@ -40,6 +40,16 @@ function AppShell() {
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
   const [clientError, setClientError] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
+  const [clientSuccess, setClientSuccess] = useState(false);
+  const [editingClientId, setEditingClientId] = useState(null);
+  const [editingDocId, setEditingDocId] = useState(null);
+  const [editDocTitle, setEditDocTitle] = useState('');
+  const [editDocContent, setEditDocContent] = useState('');
+  const [docUpdateLoading, setDocUpdateLoading] = useState(false);
+  const [docUpdateError, setDocUpdateError] = useState('');
+  const [docUpdateSuccessId, setDocUpdateSuccessId] = useState(null);
+  const [deletingDocId, setDeletingDocId] = useState(null);
+  const [docDeleteError, setDocDeleteError] = useState(null);
   const [apiKeys, setApiKeys] = useState([]);
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyError, setApiKeyError] = useState('');
@@ -54,6 +64,8 @@ function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const settingsRef = useRef(null);
   const revokeSuccessTimeoutRef = useRef(null);
+  const clientSuccessTimeoutRef = useRef(null);
+  const docUpdateSuccessTimeoutRef = useRef(null);
 
   const loadSavedDocs = async (token) => {
     try {
@@ -157,6 +169,10 @@ function AppShell() {
         setJustCreatedKey(null);
         setRevokeError(null);
         setRevokeSuccessId(null);
+        setEditingClientId(null);
+        setEditingDocId(null);
+        setDocDeleteError(null);
+        setDocUpdateSuccessId(null);
       }
     });
 
@@ -207,6 +223,12 @@ function AppShell() {
     () => () => {
       if (revokeSuccessTimeoutRef.current) {
         clearTimeout(revokeSuccessTimeoutRef.current);
+      }
+      if (clientSuccessTimeoutRef.current) {
+        clearTimeout(clientSuccessTimeoutRef.current);
+      }
+      if (docUpdateSuccessTimeoutRef.current) {
+        clearTimeout(docUpdateSuccessTimeoutRef.current);
       }
     },
     []
@@ -307,6 +329,10 @@ function AppShell() {
     setJustCreatedKey(null);
     setRevokeError(null);
     setRevokeSuccessId(null);
+    setEditingClientId(null);
+    setEditingDocId(null);
+    setDocDeleteError(null);
+    setDocUpdateSuccessId(null);
     setSettingsOpen(false);
     navigate('/login');
   };
@@ -374,22 +400,140 @@ function AppShell() {
     }
   };
 
+  const startEditDoc = (doc) => {
+    setEditingDocId(doc.id);
+    setEditDocTitle(doc.title || '');
+    setEditDocContent(doc.content || '');
+    setDocUpdateError('');
+  };
+
+  const cancelEditDoc = () => {
+    setEditingDocId(null);
+    setEditDocTitle('');
+    setEditDocContent('');
+    setDocUpdateError('');
+  };
+
+  const submitDocUpdate = async (id) => {
+    if (!session?.access_token) {
+      setDocUpdateError(t('dashboard_signInToSave'));
+      return;
+    }
+
+    const original = savedDocs.find((doc) => doc.id === id);
+
+    setDocUpdateLoading(true);
+    setDocUpdateError('');
+
+    try {
+      const response = await fetch(`/api/documents/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          title: editDocTitle.trim() || 'Generated Document',
+          prompt: original?.prompt || '',
+          content: editDocContent
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update document');
+      }
+
+      setSavedDocs((prev) => prev.map((doc) => (doc.id === id ? data : doc)));
+      setEditingDocId(null);
+      setDocUpdateSuccessId(id);
+      if (docUpdateSuccessTimeoutRef.current) {
+        clearTimeout(docUpdateSuccessTimeoutRef.current);
+      }
+      docUpdateSuccessTimeoutRef.current = setTimeout(() => setDocUpdateSuccessId(null), 3000);
+    } catch (error) {
+      console.error('Failed to update document', error);
+      setDocUpdateError(t('dashboard_docUpdateErrorGeneric'));
+    } finally {
+      setDocUpdateLoading(false);
+    }
+  };
+
+  const deleteDocument = async (id) => {
+    if (!window.confirm(t('dashboard_confirmDeleteDocument'))) {
+      return;
+    }
+
+    if (!session?.access_token) {
+      return;
+    }
+
+    setDeletingDocId(id);
+    setDocDeleteError(null);
+
+    try {
+      const response = await fetch(`/api/documents/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete document');
+      }
+
+      setSavedDocs((prev) => prev.filter((doc) => doc.id !== id));
+      if (editingDocId === id) {
+        cancelEditDoc();
+      }
+      await loadStats(session.access_token);
+    } catch (error) {
+      console.error('Failed to delete document', error);
+      setDocDeleteError({ id, message: t('dashboard_docDeleteErrorGeneric') });
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
   const handleClientChange = (field, value) => {
     setClientForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const addClient = async () => {
+  const startEditClient = (client) => {
+    setEditingClientId(client.id);
+    setClientForm({
+      name: client.name || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      case_type: client.case_type || ''
+    });
+    setClientError('');
+    setClientSuccess(false);
+  };
+
+  const cancelEditClient = () => {
+    setEditingClientId(null);
+    setClientForm({ name: '', email: '', phone: '', case_type: '' });
+    setClientError('');
+    setClientSuccess(false);
+  };
+
+  const submitClientForm = async () => {
     if (!session?.access_token) {
       setClientError('Please sign in to manage clients.');
       return;
     }
 
+    const isEditing = Boolean(editingClientId);
+
     setClientLoading(true);
     setClientError('');
+    setClientSuccess(false);
 
     try {
-      const response = await fetch('/api/clients', {
-        method: 'POST',
+      const response = await fetch(isEditing ? `/api/clients/${editingClientId}` : '/api/clients', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`
@@ -402,12 +546,23 @@ function AppShell() {
         throw new Error(data?.error || 'Unable to save client');
       }
 
-      setClients((prev) => [data, ...prev]);
+      if (isEditing) {
+        setClients((prev) => prev.map((client) => (client.id === data.id ? data : client)));
+        setEditingClientId(null);
+        setClientSuccess(true);
+        if (clientSuccessTimeoutRef.current) {
+          clearTimeout(clientSuccessTimeoutRef.current);
+        }
+        clientSuccessTimeoutRef.current = setTimeout(() => setClientSuccess(false), 3000);
+      } else {
+        setClients((prev) => [data, ...prev]);
+      }
+
       setClientForm({ name: '', email: '', phone: '', case_type: '' });
       await loadStats(session.access_token);
     } catch (error) {
-      console.error('Failed to create client', error);
-      setClientError('Unable to save client. Please check your input.');
+      console.error('Failed to save client', error);
+      setClientError(t('clients_saveErrorGeneric'));
     } finally {
       setClientLoading(false);
     }
@@ -433,6 +588,9 @@ function AppShell() {
       });
       if (response.ok) {
         setClients((prev) => prev.filter((client) => client.id !== id));
+        if (editingClientId === id) {
+          cancelEditClient();
+        }
         await loadStats(session.access_token);
       }
     } catch (error) {
@@ -767,10 +925,53 @@ function AppShell() {
                 {savedDocs.length === 0 ? (
                   <p>{t('dashboard_noSaved')}</p>
                 ) : (
-                  <ul className="saved-list">
-                    {savedDocs.map((doc) => (
-                      <li key={doc.id}>{doc.title}</li>
-                    ))}
+                  <ul className="client-list">
+                    {savedDocs.map((doc) =>
+                      editingDocId === doc.id ? (
+                        <li key={doc.id}>
+                          <div style={{ width: '100%' }}>
+                            <label>{t('dashboard_docTitleLabel')}</label>
+                            <input type="text" value={editDocTitle} onChange={(e) => setEditDocTitle(e.target.value)} />
+                            <label>{t('dashboard_generatedTitle')}</label>
+                            <textarea
+                              className="dashboard-textarea"
+                              value={editDocContent}
+                              onChange={(e) => setEditDocContent(e.target.value)}
+                              rows={8}
+                            />
+                            {docUpdateError && <p className="auth-error">{docUpdateError}</p>}
+                            <div className="auth-actions">
+                              <button disabled={docUpdateLoading} onClick={() => submitDocUpdate(doc.id)}>
+                                {docUpdateLoading ? t('dashboard_saving') : t('dashboard_updateDocument')}
+                              </button>
+                              <button className="secondary" onClick={cancelEditDoc}>
+                                {t('common_cancel')}
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ) : (
+                        <li key={doc.id}>
+                          <div>
+                            <strong>{doc.title}</strong>
+                            {docUpdateSuccessId === doc.id && <p className="save-success">{t('dashboard_docUpdateSuccess')}</p>}
+                            {docDeleteError?.id === doc.id && <p className="auth-error">{docDeleteError.message}</p>}
+                          </div>
+                          <div className="auth-actions">
+                            <button className="btn-secondary" onClick={() => startEditDoc(doc)}>
+                              {t('dashboard_editDocument')}
+                            </button>
+                            <button
+                              className="danger"
+                              disabled={deletingDocId === doc.id}
+                              onClick={() => deleteDocument(doc.id)}
+                            >
+                              {deletingDocId === doc.id ? t('dashboard_deleting') : t('dashboard_deleteDocument')}
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    )}
                   </ul>
                 )}
               </div>
@@ -790,7 +991,7 @@ function AppShell() {
 
             <div className="clients-grid">
               <div className="client-panel">
-                <h3>{t('clients_addTitle')}</h3>
+                <h3>{editingClientId ? t('clients_editTitle') : t('clients_addTitle')}</h3>
                 <label>{t('clients_name')}</label>
                 <input type="text" value={clientForm.name} onChange={(e) => handleClientChange('name', e.target.value)} />
                 <label>{t('clients_email')}</label>
@@ -800,9 +1001,21 @@ function AppShell() {
                 <label>{t('clients_caseType')}</label>
                 <input type="text" value={clientForm.case_type} onChange={(e) => handleClientChange('case_type', e.target.value)} />
                 {clientError && <p className="auth-error">{clientError}</p>}
-                <button className="btn-primary" disabled={clientLoading} onClick={addClient}>
-                  {clientLoading ? t('clients_saving') : t('clients_save')}
-                </button>
+                {clientSuccess && <p className="save-success">{t('clients_updateSuccess')}</p>}
+                <div className="auth-actions">
+                  <button className="btn-primary" disabled={clientLoading} onClick={submitClientForm}>
+                    {clientLoading
+                      ? t('clients_saving')
+                      : editingClientId
+                        ? t('clients_update')
+                        : t('clients_save')}
+                  </button>
+                  {editingClientId && (
+                    <button className="secondary" onClick={cancelEditClient}>
+                      {t('common_cancel')}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="client-panel">
@@ -818,9 +1031,14 @@ function AppShell() {
                           <div>{client.email}</div>
                           <div>{client.phone}</div>
                         </div>
-                        <button className="danger" onClick={() => removeClient(client.id)}>
-                          {t('clients_delete')}
-                        </button>
+                        <div className="auth-actions">
+                          <button className="btn-secondary" onClick={() => startEditClient(client)}>
+                            {t('clients_edit')}
+                          </button>
+                          <button className="danger" onClick={() => removeClient(client.id)}>
+                            {t('clients_delete')}
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
