@@ -6,6 +6,11 @@ export const translations = {
     common_cancel: 'Cancel',
     common_tryAgain: 'Try again',
     common_retrying: 'Retrying…',
+    common_loading: 'Loading…',
+    common_previous: 'Previous',
+    common_next: 'Next',
+    common_page: 'Page',
+    common_of: 'of',
 
     nav_dashboard: 'Dashboard',
     nav_clients: 'Clients',
@@ -141,6 +146,11 @@ export const translations = {
     common_cancel: 'Cancelar',
     common_tryAgain: 'Intentar de nuevo',
     common_retrying: 'Reintentando…',
+    common_loading: 'Cargando…',
+    common_previous: 'Anterior',
+    common_next: 'Siguiente',
+    common_page: 'Página',
+    common_of: 'de',
 
     nav_dashboard: 'Panel',
     nav_clients: 'Clientes',

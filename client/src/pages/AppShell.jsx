@@ -7,6 +7,8 @@ import { usePreferences } from '../context/PreferencesContext';
 import { languageOptions } from '../lib/translations';
 import PasswordInput from '../components/shared/PasswordInput';
 
+const LIST_PAGE_LIMIT = 20;
+
 // The authenticated app (dashboard, clients, API keys, and the sign in /
 // sign up form). Business logic here is unchanged from the original
 // single-page App.jsx — only the routing mechanism was swapped from
@@ -29,9 +31,13 @@ function AppShell() {
   const [savedDocs, setSavedDocs] = useState([]);
   const [documentsError, setDocumentsError] = useState('');
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const [documentsTotal, setDocumentsTotal] = useState(0);
   const [clients, setClients] = useState([]);
   const [clientsError, setClientsError] = useState('');
   const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsPage, setClientsPage] = useState(1);
+  const [clientsTotal, setClientsTotal] = useState(0);
   const [stats, setStats] = useState({ documentsCount: 0, clientsCount: 0 });
   const [statsError, setStatsError] = useState('');
   const [statsLoading, setStatsLoading] = useState(false);
@@ -73,19 +79,23 @@ function AppShell() {
   const revokeSuccessTimeoutRef = useRef(null);
   const clientSuccessTimeoutRef = useRef(null);
   const docUpdateSuccessTimeoutRef = useRef(null);
+  const clientsListRef = useRef(null);
+  const documentsListRef = useRef(null);
 
-  const loadSavedDocs = async (token) => {
+  const loadSavedDocs = async (token, page = 1) => {
     setDocumentsLoading(true);
     setDocumentsError('');
     try {
-      const response = await fetch('/api/documents', {
+      const response = await fetch(`/api/documents?page=${page}&limit=${LIST_PAGE_LIMIT}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
       if (response.ok) {
         const data = await response.json();
-        setSavedDocs(data);
+        setSavedDocs(data.documents || []);
+        setDocumentsTotal(data.total ?? 0);
+        setDocumentsPage(data.page ?? page);
       } else {
         setDocumentsError(t('dashboard_loadDocsErrorGeneric'));
       }
@@ -97,18 +107,20 @@ function AppShell() {
     }
   };
 
-  const loadClients = async (token) => {
+  const loadClients = async (token, page = 1) => {
     setClientsLoading(true);
     setClientsError('');
     try {
-      const response = await fetch('/api/clients', {
+      const response = await fetch(`/api/clients?page=${page}&limit=${LIST_PAGE_LIMIT}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
       if (response.ok) {
         const data = await response.json();
-        setClients(data);
+        setClients(data.clients || []);
+        setClientsTotal(data.total ?? 0);
+        setClientsPage(data.page ?? page);
       } else {
         setClientsError(t('clients_loadErrorGeneric'));
       }
@@ -196,8 +208,12 @@ function AppShell() {
       } else {
         setSavedDocs([]);
         setDocumentsError('');
+        setDocumentsPage(1);
+        setDocumentsTotal(0);
         setClients([]);
         setClientsError('');
+        setClientsPage(1);
+        setClientsTotal(0);
         setStats({ documentsCount: 0, clientsCount: 0 });
         setStatsError('');
         setApiKeys([]);
@@ -360,8 +376,12 @@ function AppShell() {
     setUser(null);
     setSavedDocs([]);
     setDocumentsError('');
+    setDocumentsPage(1);
+    setDocumentsTotal(0);
     setClients([]);
     setClientsError('');
+    setClientsPage(1);
+    setClientsTotal(0);
     setStats({ documentsCount: 0, clientsCount: 0 });
     setStatsError('');
     setApiKeys([]);
@@ -430,7 +450,7 @@ function AppShell() {
       }
 
       setSaveSuccess(true);
-      await loadSavedDocs(session.access_token);
+      await loadSavedDocs(session.access_token, 1);
       await loadStats(session.access_token);
     } catch (error) {
       console.error('Failed to save document', error);
@@ -523,10 +543,10 @@ function AppShell() {
         throw new Error('Failed to delete document');
       }
 
-      setSavedDocs((prev) => prev.filter((doc) => doc.id !== id));
       if (editingDocId === id) {
         cancelEditDoc();
       }
+      await loadSavedDocs(session.access_token, 1);
       await loadStats(session.access_token);
     } catch (error) {
       console.error('Failed to delete document', error);
@@ -595,7 +615,10 @@ function AppShell() {
         }
         clientSuccessTimeoutRef.current = setTimeout(() => setClientSuccess(false), 3000);
       } else {
-        setClients((prev) => [data, ...prev]);
+        // Re-fetch page 1 rather than splicing locally -- a new client
+        // always sorts first (created_at desc), but only the server knows
+        // the real total/page-1 contents once pagination is in play.
+        await loadClients(session.access_token, 1);
       }
 
       setClientForm({ name: '', email: '', phone: '', case_type: '' });
@@ -627,10 +650,10 @@ function AppShell() {
         }
       });
       if (response.ok) {
-        setClients((prev) => prev.filter((client) => client.id !== id));
         if (editingClientId === id) {
           cancelEditClient();
         }
+        await loadClients(session.access_token, 1);
         await loadStats(session.access_token);
       }
     } catch (error) {
@@ -732,6 +755,21 @@ function AppShell() {
   };
 
   const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : 'Never');
+
+  const clientsTotalPages = Math.max(1, Math.ceil(clientsTotal / LIST_PAGE_LIMIT));
+  const documentsTotalPages = Math.max(1, Math.ceil(documentsTotal / LIST_PAGE_LIMIT));
+
+  const goToClientsPage = async (page) => {
+    if (!session?.access_token) return;
+    await loadClients(session.access_token, page);
+    clientsListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const goToDocumentsPage = async (page) => {
+    if (!session?.access_token) return;
+    await loadSavedDocs(session.access_token, page);
+    documentsListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const isLoginPage = location.pathname === '/login';
   const isDashboard = location.pathname === '/app';
@@ -972,11 +1010,11 @@ function AppShell() {
                 )}
               </div>
               <div className="dashboard-panel">
-                <h3>{t('dashboard_savedTitle')}</h3>
+                <h3 ref={documentsListRef}>{t('dashboard_savedTitle')}</h3>
                 {documentsError ? (
                   <div>
                     <p className="auth-error">{documentsError}</p>
-                    <button disabled={documentsLoading} onClick={() => loadSavedDocs(session.access_token)}>
+                    <button disabled={documentsLoading} onClick={() => loadSavedDocs(session.access_token, documentsPage)}>
                       {documentsLoading ? t('common_retrying') : t('common_tryAgain')}
                     </button>
                   </div>
@@ -1032,6 +1070,27 @@ function AppShell() {
                     )}
                   </ul>
                 )}
+                {!documentsError && documentsTotalPages > 1 && (
+                  <div className="auth-actions">
+                    <button
+                      className="secondary"
+                      disabled={documentsLoading || documentsPage <= 1}
+                      onClick={() => goToDocumentsPage(documentsPage - 1)}
+                    >
+                      {documentsLoading ? t('common_loading') : t('common_previous')}
+                    </button>
+                    <span>
+                      {t('common_page')} {documentsPage} {t('common_of')} {documentsTotalPages}
+                    </span>
+                    <button
+                      className="secondary"
+                      disabled={documentsLoading || documentsPage >= documentsTotalPages}
+                      onClick={() => goToDocumentsPage(documentsPage + 1)}
+                    >
+                      {documentsLoading ? t('common_loading') : t('common_next')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -1077,11 +1136,11 @@ function AppShell() {
               </div>
 
               <div className="client-panel">
-                <h3>{t('clients_listTitle')}</h3>
+                <h3 ref={clientsListRef}>{t('clients_listTitle')}</h3>
                 {clientsError ? (
                   <div>
                     <p className="auth-error">{clientsError}</p>
-                    <button disabled={clientsLoading} onClick={() => loadClients(session.access_token)}>
+                    <button disabled={clientsLoading} onClick={() => loadClients(session.access_token, clientsPage)}>
                       {clientsLoading ? t('common_retrying') : t('common_tryAgain')}
                     </button>
                   </div>
@@ -1107,6 +1166,27 @@ function AppShell() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {!clientsError && clientsTotalPages > 1 && (
+                  <div className="auth-actions">
+                    <button
+                      className="secondary"
+                      disabled={clientsLoading || clientsPage <= 1}
+                      onClick={() => goToClientsPage(clientsPage - 1)}
+                    >
+                      {clientsLoading ? t('common_loading') : t('common_previous')}
+                    </button>
+                    <span>
+                      {t('common_page')} {clientsPage} {t('common_of')} {clientsTotalPages}
+                    </span>
+                    <button
+                      className="secondary"
+                      disabled={clientsLoading || clientsPage >= clientsTotalPages}
+                      onClick={() => goToClientsPage(clientsPage + 1)}
+                    >
+                      {clientsLoading ? t('common_loading') : t('common_next')}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { parsePagination } from './_lib/pagination.js';
 
 export default async function handler(req, res) {
   const missingVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter((name) => !process.env[name]);
@@ -15,18 +16,26 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { data, error } = await supabase
+    const { page, limit, from, to } = parsePagination(req.query);
+
+    const { data, error, count } = await supabase
       .from('clients')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       console.error('Supabase fetch error:', error);
       return res.status(500).json({ error: 'Unable to fetch clients' });
     }
 
-    return res.status(200).json(data || []);
+    return res.status(200).json({
+      clients: data || [],
+      total: count ?? 0,
+      page,
+      limit
+    });
   }
 
   if (req.method === 'POST') {
