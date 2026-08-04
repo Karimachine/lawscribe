@@ -369,6 +369,26 @@ button {
   line-height: 1.7;
 }
 
+.legal-body {
+  max-width: 720px;
+  margin: 2.5rem auto 0;
+  text-align: left;
+}
+
+.legal-section {
+  margin-bottom: 2rem;
+}
+
+.legal-section h3 {
+  font-family: 'Libre Baskerville', serif;
+  margin-bottom: 0.5rem;
+}
+
+.legal-section p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .section {
   padding: 5rem 3rem;
 }

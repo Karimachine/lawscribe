@@ -15,6 +15,7 @@ export const translations = {
     nav_dashboard: 'Dashboard',
     nav_clients: 'Clients',
     nav_apiKeys: 'API Keys',
+    nav_billing: 'Billing',
     nav_settings: 'Settings',
     nav_signOut: 'Sign out',
     nav_signIn: 'Sign in',
@@ -181,7 +182,35 @@ export const translations = {
     notFound_title: 'Page not found',
     notFound_body: "The page you're looking for doesn't exist or has been moved.",
     notFound_backHome: 'Back to home',
-    notFound_goToDashboard: 'Go to dashboard'
+    notFound_goToDashboard: 'Go to dashboard',
+
+    footer_privacy: 'Privacy',
+    footer_terms: 'Terms',
+
+    billing_label: 'Billing',
+    billing_title: 'Billing',
+    billing_subtitle: 'Manage your LawScribe subscription.',
+    billing_alreadySubscribed: "You're subscribed to this plan.",
+    billing_subscribeButton: 'Subscribe',
+    billing_startingCheckout: 'Redirecting…',
+    billing_checkoutErrorGeneric: 'Unable to start checkout. Please try again.',
+    billing_yourSubscription: 'Your subscription',
+    billing_loading: 'Loading…',
+    billing_loadErrorGeneric: 'Unable to load your subscription. Please try again.',
+    billing_noSubscription: "You don't have an active subscription yet.",
+    billing_statusLabel: 'Status:',
+    billing_renewsLabel: 'Renews:',
+    billing_manageButton: 'Manage subscription',
+    billing_openingPortal: 'Opening…',
+    billing_portalErrorGeneric: 'Unable to open the billing portal. Please try again.',
+
+    billingSuccess_title: 'Subscription successful',
+    billingSuccess_body: "Thanks for subscribing! It may take a moment for your subscription to appear as active.",
+    billingSuccess_backToBilling: 'Back to Billing',
+
+    billingCanceled_title: 'Checkout canceled',
+    billingCanceled_body: "You weren't charged. You can restart checkout any time from the Billing page.",
+    billingCanceled_backToBilling: 'Back to Billing'
   },
   es: {
     common_cancel: 'Cancelar',
@@ -196,6 +225,7 @@ export const translations = {
     nav_dashboard: 'Panel',
     nav_clients: 'Clientes',
     nav_apiKeys: 'Claves API',
+    nav_billing: 'Facturación',
     nav_settings: 'Ajustes',
     nav_signOut: 'Cerrar sesión',
     nav_signIn: 'Iniciar sesión',
@@ -362,7 +392,35 @@ export const translations = {
     notFound_title: 'Página no encontrada',
     notFound_body: 'La página que buscas no existe o fue movida.',
     notFound_backHome: 'Volver al inicio',
-    notFound_goToDashboard: 'Ir al panel'
+    notFound_goToDashboard: 'Ir al panel',
+
+    footer_privacy: 'Privacidad',
+    footer_terms: 'Términos',
+
+    billing_label: 'Facturación',
+    billing_title: 'Facturación',
+    billing_subtitle: 'Administra tu suscripción de LawScribe.',
+    billing_alreadySubscribed: 'Estás suscrito a este plan.',
+    billing_subscribeButton: 'Suscribirse',
+    billing_startingCheckout: 'Redirigiendo…',
+    billing_checkoutErrorGeneric: 'No se pudo iniciar el pago. Inténtalo de nuevo.',
+    billing_yourSubscription: 'Tu suscripción',
+    billing_loading: 'Cargando…',
+    billing_loadErrorGeneric: 'No se pudo cargar tu suscripción. Inténtalo de nuevo.',
+    billing_noSubscription: 'Aún no tienes una suscripción activa.',
+    billing_statusLabel: 'Estado:',
+    billing_renewsLabel: 'Se renueva:',
+    billing_manageButton: 'Administrar suscripción',
+    billing_openingPortal: 'Abriendo…',
+    billing_portalErrorGeneric: 'No se pudo abrir el portal de facturación. Inténtalo de nuevo.',
+
+    billingSuccess_title: 'Suscripción exitosa',
+    billingSuccess_body: 'Gracias por suscribirte. Puede tardar un momento en aparecer como activa.',
+    billingSuccess_backToBilling: 'Volver a Facturación',
+
+    billingCanceled_title: 'Pago cancelado',
+    billingCanceled_body: 'No se te cobró nada. Puedes reiniciar el pago cuando quieras desde la página de Facturación.',
+    billingCanceled_backToBilling: 'Volver a Facturación'
   }
 };
 

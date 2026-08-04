@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import { docTypes } from '../lib/docTypes';
 import { generateDocument } from '../lib/generateDocument';
 import { usePreferences } from '../context/PreferencesContext';
 import { languageOptions } from '../lib/translations';
 import PasswordInput from '../components/shared/PasswordInput';
+import { plans } from '../lib/plans';
 
 const LIST_PAGE_LIMIT = 20;
 
@@ -90,6 +91,13 @@ function AppShell() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState('');
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState('');
   const settingsRef = useRef(null);
   const revokeSuccessTimeoutRef = useRef(null);
   const clientSuccessTimeoutRef = useRef(null);
@@ -194,6 +202,25 @@ function AppShell() {
     }
   };
 
+  // Read directly via the RLS-scoped Supabase client rather than a custom
+  // API route -- the "Users can view own subscription" policy from the
+  // 003_create_subscriptions migration already limits this to the caller's
+  // own row, so there's nothing a server route would add here.
+  const loadSubscription = async () => {
+    setSubscriptionLoading(true);
+    setSubscriptionError('');
+    try {
+      const { data, error } = await supabase.from('subscriptions').select('*').maybeSingle();
+      if (error) throw error;
+      setSubscription(data || null);
+    } catch (error) {
+      console.error('Failed to load subscription', error);
+      setSubscriptionError(t('billing_loadErrorGeneric'));
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -258,6 +285,12 @@ function AppShell() {
       navigate('/app');
     }
   }, [user, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (location.pathname === '/app/billing' && session?.access_token) {
+      loadSubscription();
+    }
+  }, [location.pathname, session]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -504,6 +537,66 @@ function AppShell() {
       console.error('Failed to delete account', error);
       setDeleteAccountError(t('settings_deleteAccountErrorGeneric'));
       setDeleteAccountLoading(false);
+    }
+  };
+
+  const startCheckout = async () => {
+    if (!session?.access_token) return;
+
+    setCheckoutLoading(true);
+    setCheckoutError('');
+    try {
+      const response = await fetch('/api/billing/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+
+      const data = await response.json();
+      if (!data.url) {
+        throw new Error('No checkout URL returned');
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Failed to start checkout', error);
+      setCheckoutError(t('billing_checkoutErrorGeneric'));
+      setCheckoutLoading(false);
+    }
+  };
+
+  const openBillingPortal = async () => {
+    if (!session?.access_token) return;
+
+    setPortalLoading(true);
+    setPortalError('');
+    try {
+      const response = await fetch('/api/billing/create-portal-session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create portal session');
+      }
+
+      const data = await response.json();
+      if (!data.url) {
+        throw new Error('No portal URL returned');
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Failed to open billing portal', error);
+      setPortalError(t('billing_portalErrorGeneric'));
+      setPortalLoading(false);
     }
   };
 
@@ -885,6 +978,8 @@ function AppShell() {
   const isDashboard = location.pathname === '/app';
   const isClients = location.pathname === '/app/clients';
   const isApiKeys = location.pathname === '/app/keys';
+  const isBilling = location.pathname === '/app/billing';
+  const hasActiveSubscription = subscription?.status === 'active' || subscription?.status === 'trialing';
 
   return (
     <div className="app-shell">
@@ -914,6 +1009,9 @@ function AppShell() {
           </button>
           <button className="nav-link" onClick={() => guardedNavigate('/app/keys')}>
             {t('nav_apiKeys')}
+          </button>
+          <button className="nav-link" onClick={() => guardedNavigate('/app/billing')}>
+            {t('nav_billing')}
           </button>
           {user ? (
             <button className="nav-cta" onClick={signOut}>
@@ -1473,6 +1571,80 @@ function AppShell() {
             </div>
           </section>
         )}
+
+        {isBilling && (
+          <section className="clients-page">
+            <div className="page-header">
+              <div>
+                <span className="section-label">{t('billing_label')}</span>
+                <h2>{t('billing_title')}</h2>
+                <p>{t('billing_subtitle')}</p>
+              </div>
+            </div>
+
+            <div className="clients-grid">
+              <div className="client-panel">
+                <div className="plan featured">
+                  <div className="plan-name">{plans[0].name}</div>
+                  <div className="plan-price">
+                    {plans[0].price}
+                    <span>{plans[0].period}</span>
+                  </div>
+                  <p className="plan-desc">{plans[0].description}</p>
+                  <div className="plan-divider" />
+                  {plans[0].features.map((feature) => (
+                    <p key={feature} className="plan-feature">
+                      {feature}
+                    </p>
+                  ))}
+                  {checkoutError && <p className="auth-error">{checkoutError}</p>}
+                  {hasActiveSubscription ? (
+                    <p className="save-success">{t('billing_alreadySubscribed')}</p>
+                  ) : (
+                    <button className="plan-btn featured" disabled={checkoutLoading} onClick={startCheckout}>
+                      {checkoutLoading ? t('billing_startingCheckout') : t('billing_subscribeButton')}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="client-panel">
+                <h3>{t('billing_yourSubscription')}</h3>
+                {subscriptionLoading ? (
+                  <p>{t('billing_loading')}</p>
+                ) : subscriptionError ? (
+                  <div>
+                    <p className="auth-error">{subscriptionError}</p>
+                    <button onClick={loadSubscription}>{t('common_tryAgain')}</button>
+                  </div>
+                ) : !subscription?.status ? (
+                  <p>{t('billing_noSubscription')}</p>
+                ) : (
+                  <>
+                    <p>
+                      {t('billing_statusLabel')} <strong>{subscription.status}</strong>
+                    </p>
+                    {subscription.current_period_end && (
+                      <p>
+                        {t('billing_renewsLabel')} {formatDate(subscription.current_period_end)}
+                      </p>
+                    )}
+                  </>
+                )}
+                {subscription?.stripe_customer_id && (
+                  <>
+                    {portalError && <p className="auth-error">{portalError}</p>}
+                    <div className="auth-actions">
+                      <button disabled={portalLoading} onClick={openBillingPortal}>
+                        {portalLoading ? t('billing_openingPortal') : t('billing_manageButton')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       <footer className="footer">
@@ -1480,8 +1652,8 @@ function AppShell() {
           Law<span>Scribe</span>
         </a>
         <div className="footer-links">
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
+          <Link to="/privacy">{t('footer_privacy')}</Link>
+          <Link to="/terms">{t('footer_terms')}</Link>
           <a href="#">Help</a>
           <a href="#">Contact</a>
         </div>
