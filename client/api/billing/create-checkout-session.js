@@ -1,12 +1,23 @@
 import { getSupabaseAdmin, getUserFromToken } from '../_lib/supabaseAdmin.js';
 import { getStripe } from '../_lib/stripe.js';
 
+// Server-side plan -> price ID map. The client only ever sends a plan
+// name ("pro"/"firm") -- never a price ID -- so there's no way to tamper
+// with the request to check out at a cheaper price than the plan implies.
+// "free" is deliberately absent: free signups never call this endpoint.
+function resolvePriceId(plan) {
+  if (plan === 'pro') return process.env.STRIPE_PRICE_ID_PRO;
+  if (plan === 'firm') return process.env.STRIPE_PRICE_ID_FIRM;
+  return null;
+}
+
 export default async function handler(req, res) {
   const missingVars = [
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
     'STRIPE_SECRET_KEY',
-    'STRIPE_PRICE_ID'
+    'STRIPE_PRICE_ID_PRO',
+    'STRIPE_PRICE_ID_FIRM'
   ].filter((name) => !process.env[name]);
   if (missingVars.length > 0) {
     console.error(`Missing required environment variable(s): ${missingVars.join(', ')}`);
@@ -16,6 +27,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { plan } = req.body || {};
+  const priceId = resolvePriceId(plan);
+  if (!priceId) {
+    return res.status(400).json({ error: 'Invalid plan. Expected "pro" or "firm".' });
   }
 
   const supabase = getSupabaseAdmin();
@@ -57,7 +74,7 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin}/billing/success`,
       cancel_url: `${origin}/billing/canceled`,
       client_reference_id: user.id,

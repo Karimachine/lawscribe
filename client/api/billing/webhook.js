@@ -20,12 +20,23 @@ function readRawBody(req) {
   });
 }
 
+// Inverse of resolvePriceId() in create-checkout-session.js -- maps a
+// Stripe Price ID back to the plan name stored in the subscriptions table.
+function resolvePlanFromPriceId(priceId) {
+  if (priceId && priceId === process.env.STRIPE_PRICE_ID_PRO) return 'pro';
+  if (priceId && priceId === process.env.STRIPE_PRICE_ID_FIRM) return 'firm';
+  console.error('Stripe subscription price ID did not match any configured plan:', priceId);
+  return null;
+}
+
 export default async function handler(req, res) {
   const missingVars = [
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
     'STRIPE_SECRET_KEY',
-    'STRIPE_WEBHOOK_SECRET'
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PRICE_ID_PRO',
+    'STRIPE_PRICE_ID_FIRM'
   ].filter((name) => !process.env[name]);
   if (missingVars.length > 0) {
     console.error(`Missing required environment variable(s): ${missingVars.join(', ')}`);
@@ -61,13 +72,14 @@ export default async function handler(req, res) {
         }
 
         const subscription = await stripe.subscriptions.retrieve(session.subscription);
+        const plan = resolvePlanFromPriceId(subscription.items.data[0]?.price?.id);
 
         const { error } = await supabase.from('subscriptions').upsert(
           {
             user_id: userId,
             stripe_customer_id: session.customer,
             stripe_subscription_id: subscription.id,
-            plan: subscription.items.data[0]?.price?.id || null,
+            plan,
             status: subscription.status,
             current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
           },
@@ -83,12 +95,13 @@ export default async function handler(req, res) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
+        const plan = resolvePlanFromPriceId(subscription.items.data[0]?.price?.id);
 
         const { error } = await supabase
           .from('subscriptions')
           .update({
             stripe_subscription_id: subscription.id,
-            plan: subscription.items.data[0]?.price?.id || null,
+            plan,
             status: subscription.status,
             current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
           })

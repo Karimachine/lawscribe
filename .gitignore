@@ -3,4 +3,5 @@ client/node_modules/
 dist/
 .env
 client/.env*
+!client/.env.example
 .DS_Store

@@ -576,11 +576,14 @@ button {
 }
 
 .plan-btn {
+  display: block;
   width: 100%;
   margin-top: 1.25rem;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--ink);
+  text-align: center;
+  text-decoration: none;
 }
 
 .plan-btn.featured {

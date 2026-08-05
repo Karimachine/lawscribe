@@ -7,6 +7,7 @@ import { usePreferences } from '../context/PreferencesContext';
 import { languageOptions } from '../lib/translations';
 import PasswordInput from '../components/shared/PasswordInput';
 import { plans } from '../lib/plans';
+import { PENDING_CHECKOUT_PLAN_KEY } from '../components/home/PricingSection';
 
 const LIST_PAGE_LIMIT = 20;
 
@@ -94,8 +95,6 @@ function AppShell() {
   const [subscription, setSubscription] = useState(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState('');
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState('');
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState('');
   const settingsRef = useRef(null);
@@ -221,6 +220,24 @@ function AppShell() {
     }
   };
 
+  // Idempotent: only actually inserts a row the first time it's called for
+  // a given user (see create-free-subscription.js). Called on every
+  // session establish, not just right after signUp(), because signUp()
+  // doesn't hand back a session when email confirmation is required --
+  // there'd be nothing to authenticate this call with at that point.
+  const ensureFreePlan = async (token) => {
+    try {
+      await fetch('/api/billing/create-free-subscription', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Failed to ensure free plan', error);
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -229,7 +246,13 @@ function AppShell() {
         setUser(data?.session?.user || null);
         const token = data?.session?.access_token;
         if (token) {
-          await Promise.all([loadSavedDocs(token), loadClients(token), loadStats(token), loadApiKeys(token)]);
+          await Promise.all([
+            loadSavedDocs(token),
+            loadClients(token),
+            loadStats(token),
+            loadApiKeys(token),
+            ensureFreePlan(token)
+          ]);
         }
       } catch (error) {
         console.warn('Auth session error:', error);
@@ -246,7 +269,8 @@ function AppShell() {
           loadSavedDocs(session.access_token),
           loadClients(session.access_token),
           loadStats(session.access_token),
-          loadApiKeys(session.access_token)
+          loadApiKeys(session.access_token),
+          ensureFreePlan(session.access_token)
         ]);
       } else {
         setSavedDocs([]);
@@ -268,6 +292,8 @@ function AppShell() {
         setEditingDocId(null);
         setDocDeleteError(null);
         setDocUpdateSuccessId(null);
+        setSubscription(null);
+        setSubscriptionError('');
       }
     });
 
@@ -282,9 +308,15 @@ function AppShell() {
     if (!user && location.pathname !== '/login') {
       navigate('/login');
     } else if (user && location.pathname === '/login') {
-      navigate('/app');
+      const pendingPlan = localStorage.getItem(PENDING_CHECKOUT_PLAN_KEY);
+      if (pendingPlan && session?.access_token) {
+        localStorage.removeItem(PENDING_CHECKOUT_PLAN_KEY);
+        startCheckoutForPlan(pendingPlan, session.access_token);
+      } else {
+        navigate('/app');
+      }
     }
-  }, [user, location.pathname, navigate]);
+  }, [user, location.pathname, navigate, session]);
 
   useEffect(() => {
     if (location.pathname === '/app/billing' && session?.access_token) {
@@ -540,17 +572,22 @@ function AppShell() {
     }
   };
 
-  const startCheckout = async () => {
-    if (!session?.access_token) return;
+  // Only called from the post-login "resume checkout" effect below --
+  // initiating checkout for a plan the user chose *before* signing in.
+  // Subscribing itself always happens from the public pricing page now
+  // (see PricingSection.jsx); this page only shows/manages the current
+  // plan.
+  const startCheckoutForPlan = async (plan, token) => {
+    if (!token) return;
 
-    setCheckoutLoading(true);
-    setCheckoutError('');
     try {
       const response = await fetch('/api/billing/create-checkout-session', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`
-        }
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ plan })
       });
 
       if (!response.ok) {
@@ -564,9 +601,8 @@ function AppShell() {
 
       window.location.href = data.url;
     } catch (error) {
-      console.error('Failed to start checkout', error);
-      setCheckoutError(t('billing_checkoutErrorGeneric'));
-      setCheckoutLoading(false);
+      console.error('Failed to resume checkout after login', error);
+      navigate('/app/billing');
     }
   };
 
@@ -979,7 +1015,7 @@ function AppShell() {
   const isClients = location.pathname === '/app/clients';
   const isApiKeys = location.pathname === '/app/keys';
   const isBilling = location.pathname === '/app/billing';
-  const hasActiveSubscription = subscription?.status === 'active' || subscription?.status === 'trialing';
+  const currentPlan = plans.find((plan) => plan.id === subscription?.plan) || plans[0];
 
   return (
     <div className="app-shell">
@@ -1584,26 +1620,23 @@ function AppShell() {
 
             <div className="clients-grid">
               <div className="client-panel">
-                <div className="plan featured">
-                  <div className="plan-name">{plans[0].name}</div>
+                <div className={`plan ${currentPlan.id === 'pro' ? 'featured' : ''}`}>
+                  <div className="plan-name">{currentPlan.name}</div>
                   <div className="plan-price">
-                    {plans[0].price}
-                    <span>{plans[0].period}</span>
+                    {currentPlan.price}
+                    <span>{currentPlan.period}</span>
                   </div>
-                  <p className="plan-desc">{plans[0].description}</p>
+                  <p className="plan-desc">{currentPlan.description}</p>
                   <div className="plan-divider" />
-                  {plans[0].features.map((feature) => (
+                  {currentPlan.features.map((feature) => (
                     <p key={feature} className="plan-feature">
                       {feature}
                     </p>
                   ))}
-                  {checkoutError && <p className="auth-error">{checkoutError}</p>}
-                  {hasActiveSubscription ? (
-                    <p className="save-success">{t('billing_alreadySubscribed')}</p>
-                  ) : (
-                    <button className="plan-btn featured" disabled={checkoutLoading} onClick={startCheckout}>
-                      {checkoutLoading ? t('billing_startingCheckout') : t('billing_subscribeButton')}
-                    </button>
+                  {currentPlan.id === 'free' && (
+                    <a href="/#pricing" className="plan-btn">
+                      {t('billing_viewPlans')}
+                    </a>
                   )}
                 </div>
               </div>

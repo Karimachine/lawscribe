@@ -1,19 +1,41 @@
-// Display-only plan copy. The actual Stripe Price used for checkout is
-// selected server-side (STRIPE_PRICE_ID env var) -- this only controls
-// what's shown on the Billing page. Add more entries here if/when a second
-// plan is introduced.
+// Single source of truth for plan display copy -- used by both the public
+// pricing section (components/home/PricingSection.jsx) and the
+// authenticated Billing page (pages/AppShell.jsx). The actual Stripe Price
+// used for checkout is selected server-side from the plan id
+// (STRIPE_PRICE_ID_PRO / STRIPE_PRICE_ID_FIRM); "free" never touches
+// Stripe at all. This file only controls what's shown in the UI.
 //
-// Matches the "Pro" tier already advertised on the public pricing section
-// (components/home/PricingSection.jsx) -- that page currently lists three
-// placeholder tiers (Free/Pro/Firm) pending real pricing decisions, while
-// only this one is actually wired up to Stripe so far.
+// TODO: confirm pricing -- tiers, prices, and feature lists below are
+// placeholders until real pricing is finalized.
 export const plans = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: '$0',
+    period: '/mo',
+    description: 'Try LawScribe with no commitment.',
+    features: ['3 documents / month', 'Access to core document types', 'Community support'],
+    cta: 'Get Started',
+    featured: false
+  },
   {
     id: 'pro',
     name: 'Pro',
     price: '$29',
     period: '/mo',
     description: 'For solo practitioners and freelancers.',
-    features: ['Unlimited documents', 'Full document type library', 'Client management', 'Priority email support']
+    features: ['Unlimited documents', 'Full document type library', 'Client management', 'Priority email support'],
+    cta: 'Sign Up',
+    featured: true
+  },
+  {
+    id: 'firm',
+    name: 'Firm',
+    price: '$99',
+    period: '/mo',
+    description: 'For small firms and teams.',
+    features: ['Everything in Pro', 'Multiple team members', 'Shared client directory', 'Dedicated support'],
+    cta: 'Sign Up',
+    featured: false
   }
 ];
