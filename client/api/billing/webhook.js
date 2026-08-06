@@ -29,6 +29,27 @@ function resolvePlanFromPriceId(priceId) {
   return null;
 }
 
+// Newer Stripe API versions moved current_period_end off the top-level
+// Subscription object and onto each SubscriptionItem (each item can have
+// its own billing period now). Check both locations so this works
+// regardless of which API version the account is pinned to.
+function resolveCurrentPeriodEnd(subscription) {
+  return subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end;
+}
+
+// Converts a Stripe Unix-seconds timestamp to an ISO string. Stripe
+// webhook handlers must not throw on a single malformed/missing field --
+// a thrown error means Stripe treats the whole event as failed and
+// retries it, delaying every other field in the same upsert too. Log and
+// omit instead.
+function unixSecondsToIso(value, context) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    console.warn(`Missing or invalid current_period_end for ${context}; leaving it unset.`, value);
+    return null;
+  }
+  return new Date(value * 1000).toISOString();
+}
+
 export default async function handler(req, res) {
   const missingVars = [
     'SUPABASE_URL',
@@ -81,7 +102,10 @@ export default async function handler(req, res) {
             stripe_subscription_id: subscription.id,
             plan,
             status: subscription.status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+            current_period_end: unixSecondsToIso(
+              resolveCurrentPeriodEnd(subscription),
+              `checkout.session.completed (subscription ${subscription.id})`
+            )
           },
           { onConflict: 'user_id' }
         );
@@ -103,7 +127,10 @@ export default async function handler(req, res) {
             stripe_subscription_id: subscription.id,
             plan,
             status: subscription.status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+            current_period_end: unixSecondsToIso(
+              resolveCurrentPeriodEnd(subscription),
+              `${event.type} (subscription ${subscription.id})`
+            )
           })
           .eq('stripe_customer_id', subscription.customer);
 
