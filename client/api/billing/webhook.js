@@ -105,7 +105,8 @@ export default async function handler(req, res) {
             current_period_end: unixSecondsToIso(
               resolveCurrentPeriodEnd(subscription),
               `checkout.session.completed (subscription ${subscription.id})`
-            )
+            ),
+            cancel_at_period_end: subscription.cancel_at_period_end ?? false
           },
           { onConflict: 'user_id' }
         );
@@ -130,7 +131,8 @@ export default async function handler(req, res) {
             current_period_end: unixSecondsToIso(
               resolveCurrentPeriodEnd(subscription),
               `${event.type} (subscription ${subscription.id})`
-            )
+            ),
+            cancel_at_period_end: subscription.cancel_at_period_end ?? false
           })
           .eq('stripe_customer_id', subscription.customer);
 

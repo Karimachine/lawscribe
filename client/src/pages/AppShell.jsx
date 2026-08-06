@@ -1659,7 +1659,8 @@ function AppShell() {
                     </p>
                     {subscription.current_period_end && (
                       <p>
-                        {t('billing_renewsLabel')} {formatDate(subscription.current_period_end)}
+                        {subscription.cancel_at_period_end ? t('billing_cancelsLabel') : t('billing_renewsLabel')}{' '}
+                        {formatDate(subscription.current_period_end)}
                       </p>
                     )}
                   </>
