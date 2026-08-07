@@ -50,6 +50,30 @@ function unixSecondsToIso(value, context) {
   return new Date(value * 1000).toISOString();
 }
 
+// Reverts a fully-terminated subscription back to the implicit Free tier.
+// stripe_customer_id is deliberately left untouched -- if they resubscribe
+// later, create-checkout-session reuses the same Stripe customer rather
+// than creating a duplicate. current_period_end is cleared too (not just
+// the three fields the plan reversion itself needs): leaving the old
+// paid-plan's period-end sitting on a "free" row would make the Billing
+// page show a stale "Renews on <date>" for a plan that never renews.
+async function revertToFreePlan(supabase, subscription, context) {
+  const { error } = await supabase
+    .from('subscriptions')
+    .update({
+      plan: 'free',
+      status: 'active',
+      cancel_at_period_end: false,
+      stripe_subscription_id: null,
+      current_period_end: null
+    })
+    .eq('stripe_customer_id', subscription.customer);
+
+  if (error) {
+    console.error(`Failed to revert subscription to free plan on ${context}:`, error);
+  }
+}
+
 export default async function handler(req, res) {
   const missingVars = [
     'SUPABASE_URL',
@@ -117,9 +141,28 @@ export default async function handler(req, res) {
         break;
       }
 
-      case 'customer.subscription.updated':
+      // customer.subscription.deleted is the event Stripe actually fires
+      // when a subscription reaches full/final cancellation -- both for an
+      // immediate cancellation and for one that was scheduled via
+      // cancel_at_period_end and has now reached that date. It's a
+      // separate event from .updated, not a status value .updated carries.
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
+        await revertToFreePlan(supabase, subscription, event.type);
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+
+        // Defensive: if a terminal 'canceled' status is ever reported via
+        // .updated instead of a distinct .deleted event, handle it the
+        // same way rather than writing a stale paid-plan row.
+        if (subscription.status === 'canceled') {
+          await revertToFreePlan(supabase, subscription, event.type);
+          break;
+        }
+
         const plan = resolvePlanFromPriceId(subscription.items.data[0]?.price?.id);
 
         const { error } = await supabase

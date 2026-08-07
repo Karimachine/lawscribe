@@ -1665,7 +1665,7 @@ function AppShell() {
                     )}
                   </>
                 )}
-                {subscription?.stripe_customer_id && (
+                {subscription?.stripe_subscription_id && (
                   <>
                     {portalError && <p className="auth-error">{portalError}</p>}
                     <div className="auth-actions">
