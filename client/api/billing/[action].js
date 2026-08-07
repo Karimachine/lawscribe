@@ -11,6 +11,8 @@ function resolvePriceId(plan) {
   return null;
 }
 
+// Guards against creating a second Stripe subscription for a user who
+// already has an active one -- see the hasActivePaidPlan check below.
 async function handleCreateCheckoutSession(req, res, { supabase, stripe, user }) {
   const missingVars = ['STRIPE_PRICE_ID_PRO', 'STRIPE_PRICE_ID_FIRM'].filter((name) => !process.env[name]);
   if (missingVars.length > 0) {
@@ -27,9 +29,47 @@ async function handleCreateCheckoutSession(req, res, { supabase, stripe, user })
   try {
     const { data: existing } = await supabase
       .from('subscriptions')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, plan, status')
       .eq('user_id', user.id)
       .maybeSingle();
+
+    const hasActivePaidPlan =
+      existing &&
+      (existing.status === 'active' || existing.status === 'trialing') &&
+      (existing.plan === 'pro' || existing.plan === 'firm');
+
+    if (hasActivePaidPlan) {
+      // Never create a second Stripe subscription for a customer who
+      // already has one -- that's what let one test account end up with
+      // three simultaneous active subscriptions. Same plan: tell the user
+      // rather than re-checking out. Different plan: tier switching is
+      // Stripe Portal's job, not a new Checkout Session.
+      if (existing.plan === plan) {
+        return res.status(409).json({
+          error: 'already_subscribed',
+          message: "You're already subscribed to this plan."
+        });
+      }
+
+      if (!existing.stripe_customer_id) {
+        // Shouldn't happen -- an active paid plan implies a Stripe
+        // customer exists -- but fail safely instead of risking a
+        // duplicate subscription.
+        console.error('Active paid plan with no stripe_customer_id for user:', user.id);
+        return res.status(409).json({
+          error: 'already_subscribed',
+          message: 'You already have an active subscription. Please contact support to change plans.'
+        });
+      }
+
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: existing.stripe_customer_id,
+        return_url: `${origin}/app/billing`
+      });
+
+      return res.status(200).json({ url: portalSession.url });
+    }
 
     let customerId = existing?.stripe_customer_id;
 
