@@ -1,5 +1,5 @@
-import { getSupabaseAdmin, getUserFromToken } from '../_lib/supabaseAdmin.js';
-import { getStripe } from '../_lib/stripe.js';
+import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { getStripe } from './_lib/stripe.js';
 
 // Server-side plan -> price ID map. The client only ever sends a plan
 // name ("pro"/"firm") -- never a price ID -- so there's no way to tamper
@@ -165,13 +165,18 @@ async function handleCreateFreeSubscription(req, res, { supabase, user }) {
   return res.status(201).json({ ok: true });
 }
 
-// Dynamic route: [action].js matches /api/billing/<anything>, so this one
-// file replaces what used to be create-checkout-session.js,
-// create-portal-session.js, and create-free-subscription.js -- the exact
-// same URLs the frontend already calls now resolve here via req.query.action,
-// no frontend changes needed. webhook.js is deliberately NOT merged in:
-// it needs the raw request body disabled for signature verification
-// (see webhook.js), which would break JSON parsing for these three POST
+// Flat file + query-string dispatch (?action=...), not a [action].js
+// dynamic-segment route -- Vercel's zero-config "Other" framework
+// detection doesn't reliably register bracket-syntax dynamic API routes as
+// real functions (confirmed: /api/clients, /api/documents, /api/keys, and
+// /api/billing all 404'd at the platform level after the bracket-route
+// consolidation). This one file still replaces what used to be
+// create-checkout-session.js, create-portal-session.js, and
+// create-free-subscription.js -- req.query.action now comes from an actual
+// ?action=... query string instead of a path segment, but the dispatch
+// logic itself is unchanged. webhook.js is deliberately NOT merged in: it
+// needs the raw request body disabled for signature verification (see
+// webhook.js), which would break JSON parsing for these three POST
 // actions if they shared one file.
 const ACTIONS = {
   'create-checkout-session': handleCreateCheckoutSession,

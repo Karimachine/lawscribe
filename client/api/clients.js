@@ -1,11 +1,17 @@
-import { getSupabaseAdmin, getUserFromToken } from '../_lib/supabaseAdmin.js';
-import { parsePagination } from '../_lib/pagination.js';
+import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { parsePagination } from './_lib/pagination.js';
 
-// Optional catch-all: matches both /api/documents (list/create) and
-// /api/documents/:id (update/delete), merging what used to be documents.js
-// + documents/[id].js into one Vercel function. External routes/behavior
-// are unchanged -- req.query.id is undefined for the former, a
-// one-element array for the latter.
+// Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
+// catch-all -- Vercel's zero-config "Other" framework detection doesn't
+// reliably register bracket-syntax dynamic API routes as real functions
+// (confirmed: /api/clients, /api/documents, /api/keys, and /api/billing
+// all 404'd at the platform level after the bracket-route consolidation).
+// This still serves both /api/clients (list/create) and
+// /api/clients?id=... (update/delete) from one function -- req.query.id is
+// undefined for the former, a plain string for the latter. The
+// array-of-length->1 guard below now defends against a client sending
+// ?id=a&id=b (repeated query params), not multi-segment paths, since that
+// concept doesn't apply to a flat file.
 function resolveId(rawId) {
   if (Array.isArray(rawId)) {
     return rawId.length === 1 ? rawId[0] : null;
@@ -29,7 +35,7 @@ export default async function handler(req, res) {
 
   const rawId = req.query.id;
   if (Array.isArray(rawId) && rawId.length > 1) {
-    // e.g. /api/documents/a/b -- never matched any route before this merge.
+    // e.g. ?id=a&id=b -- ambiguous, reject rather than guessing.
     return res.status(404).json({ error: 'Not found' });
   }
   const id = resolveId(rawId);
@@ -39,7 +45,7 @@ export default async function handler(req, res) {
       const { page, limit, from, to } = parsePagination(req.query);
 
       const { data, error, count } = await supabase
-        .from('documents')
+        .from('clients')
         .select('*', { count: 'exact' })
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -47,11 +53,11 @@ export default async function handler(req, res) {
 
       if (error) {
         console.error('Supabase fetch error:', error);
-        return res.status(500).json({ error: 'Unable to fetch documents' });
+        return res.status(500).json({ error: 'Unable to fetch clients' });
       }
 
       return res.status(200).json({
-        documents: data || [],
+        clients: data || [],
         total: count ?? 0,
         page,
         limit
@@ -59,19 +65,20 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { title, prompt, content } = req.body || {};
-      if (!prompt || !content) {
-        return res.status(400).json({ error: 'Prompt and content are required.' });
+      const { name, email, phone, case_type } = req.body || {};
+      if (!name) {
+        return res.status(400).json({ error: 'Name is required.' });
       }
 
       const insert = {
         user_id: user.id,
-        title: title || 'Generated Document',
-        prompt,
-        content
+        name,
+        email: email || null,
+        phone: phone || null,
+        case_type: case_type || null
       };
 
-      const { data, error } = await supabase.from('documents').insert([insert]).select().single();
+      const { data, error } = await supabase.from('clients').insert([insert]).select().single();
       if (error) {
         console.error('Supabase insert error:', {
           message: error.message,
@@ -79,7 +86,7 @@ export default async function handler(req, res) {
           details: error.details,
           hint: error.hint
         });
-        return res.status(500).json({ error: 'Unable to save document' });
+        return res.status(500).json({ error: 'Unable to save client' });
       }
 
       return res.status(201).json(data);
@@ -90,17 +97,18 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
-    const { title, prompt, content } = req.body || {};
-    if (!prompt || !content) {
-      return res.status(400).json({ error: 'Prompt and content are required.' });
+    const { name, email, phone, case_type } = req.body || {};
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required.' });
     }
 
     const { data, error } = await supabase
-      .from('documents')
+      .from('clients')
       .update({
-        title: title || 'Generated Document',
-        prompt,
-        content
+        name,
+        email: email || null,
+        phone: phone || null,
+        case_type: case_type || null
       })
       .eq('id', id)
       .eq('user_id', user.id)
@@ -109,7 +117,7 @@ export default async function handler(req, res) {
 
     if (error || !data) {
       console.error('Supabase update error:', error);
-      return res.status(404).json({ error: 'Document not found' });
+      return res.status(404).json({ error: 'Client not found' });
     }
 
     return res.status(200).json(data);
@@ -117,7 +125,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     const { error } = await supabase
-      .from('documents')
+      .from('clients')
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
@@ -129,7 +137,7 @@ export default async function handler(req, res) {
         details: error.details,
         hint: error.hint
       });
-      return res.status(500).json({ error: 'Unable to delete document' });
+      return res.status(500).json({ error: 'Unable to delete client' });
     }
 
     return res.status(204).end();

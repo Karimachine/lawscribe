@@ -74,7 +74,7 @@ function PricingSection() {
 
     setLoadingPlanId(planId);
     try {
-      const response = await fetch('/api/billing/create-portal-session', {
+      const response = await fetch('/api/billing?action=create-portal-session', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`
@@ -112,7 +112,7 @@ function PricingSection() {
 
     setLoadingPlanId(planId);
     try {
-      const response = await fetch('/api/billing/create-checkout-session', {
+      const response = await fetch('/api/billing?action=create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

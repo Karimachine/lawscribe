@@ -1,11 +1,17 @@
-import { getSupabaseAdmin, getUserFromToken } from '../_lib/supabaseAdmin.js';
-import { generateApiKey } from '../../lib/apiKeys.js';
+import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { generateApiKey } from '../lib/apiKeys.js';
 
-// Optional catch-all: matches both /api/keys (list/create) and
-// /api/keys/:id (revoke), merging what used to be keys/index.js +
-// keys/[id].js into one Vercel function. External routes/behavior are
-// unchanged -- req.query.id is undefined for the former, a one-element
-// array for the latter.
+// Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
+// catch-all -- Vercel's zero-config "Other" framework detection doesn't
+// reliably register bracket-syntax dynamic API routes as real functions
+// (confirmed: /api/clients, /api/documents, /api/keys, and /api/billing
+// all 404'd at the platform level after the bracket-route consolidation).
+// This still serves both /api/keys (list/create) and /api/keys?id=...
+// (revoke) from one function -- req.query.id is undefined for the former,
+// a plain string for the latter. The array-of-length->1 guard below now
+// defends against a client sending ?id=a&id=b (repeated query params),
+// not multi-segment paths, since that concept doesn't apply to a flat
+// file.
 function resolveId(rawId) {
   if (Array.isArray(rawId)) {
     return rawId.length === 1 ? rawId[0] : null;
@@ -29,7 +35,7 @@ export default async function handler(req, res) {
 
   const rawId = req.query.id;
   if (Array.isArray(rawId) && rawId.length > 1) {
-    // e.g. /api/keys/a/b -- never matched any route before this merge.
+    // e.g. ?id=a&id=b -- ambiguous, reject rather than guessing.
     return res.status(404).json({ error: 'Not found' });
   }
   const id = resolveId(rawId);

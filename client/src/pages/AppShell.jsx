@@ -227,7 +227,7 @@ function AppShell() {
   // there'd be nothing to authenticate this call with at that point.
   const ensureFreePlan = async (token) => {
     try {
-      await fetch('/api/billing/create-free-subscription', {
+      await fetch('/api/billing?action=create-free-subscription', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -581,7 +581,7 @@ function AppShell() {
     if (!token) return;
 
     try {
-      const response = await fetch('/api/billing/create-checkout-session', {
+      const response = await fetch('/api/billing?action=create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -612,7 +612,7 @@ function AppShell() {
     setPortalLoading(true);
     setPortalError('');
     try {
-      const response = await fetch('/api/billing/create-portal-session', {
+      const response = await fetch('/api/billing?action=create-portal-session', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`
@@ -725,7 +725,7 @@ function AppShell() {
     setDocUpdateError('');
 
     try {
-      const response = await fetch(`/api/documents/${id}`, {
+      const response = await fetch(`/api/documents?id=${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -771,7 +771,7 @@ function AppShell() {
     setDocDeleteError(null);
 
     try {
-      const response = await fetch(`/api/documents/${id}`, {
+      const response = await fetch(`/api/documents?id=${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`
@@ -831,7 +831,7 @@ function AppShell() {
     setClientSuccess(false);
 
     try {
-      const response = await fetch(isEditing ? `/api/clients/${editingClientId}` : '/api/clients', {
+      const response = await fetch(isEditing ? `/api/clients?id=${editingClientId}` : '/api/clients', {
         method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -882,7 +882,7 @@ function AppShell() {
     }
 
     try {
-      const response = await fetch(`/api/clients/${id}`, {
+      const response = await fetch(`/api/clients?id=${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`
@@ -957,7 +957,7 @@ function AppShell() {
     }
 
     try {
-      const response = await fetch(`/api/keys/${id}`, {
+      const response = await fetch(`/api/keys?id=${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`

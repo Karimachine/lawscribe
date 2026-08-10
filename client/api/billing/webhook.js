@@ -50,6 +50,19 @@ function unixSecondsToIso(value, context) {
   return new Date(value * 1000).toISOString();
 }
 
+// Whether the subscription is scheduled to stop renewing. Depending on
+// API version/flow, Stripe signals this two different ways:
+// cancel_at_period_end (boolean) is the more commonly-documented signal,
+// but some cancellations (confirmed via a real webhook payload on API
+// version 2026-07-29.dahlia) instead report cancel_at_period_end: false
+// while setting cancel_at to the specific timestamp it'll cancel at, plus
+// cancellation_details.reason: "cancellation_requested". Checking
+// cancel_at_period_end alone misses that case entirely -- treat either
+// signal as "scheduled to cancel".
+function isScheduledToCancel(subscription) {
+  return Boolean(subscription.cancel_at_period_end) || subscription.cancel_at != null;
+}
+
 // Reverts a fully-terminated subscription back to the implicit Free tier.
 // stripe_customer_id is deliberately left untouched -- if they resubscribe
 // later, create-checkout-session reuses the same Stripe customer rather
@@ -130,7 +143,7 @@ export default async function handler(req, res) {
               resolveCurrentPeriodEnd(subscription),
               `checkout.session.completed (subscription ${subscription.id})`
             ),
-            cancel_at_period_end: subscription.cancel_at_period_end ?? false
+            cancel_at_period_end: isScheduledToCancel(subscription)
           },
           { onConflict: 'user_id' }
         );
@@ -175,7 +188,7 @@ export default async function handler(req, res) {
               resolveCurrentPeriodEnd(subscription),
               `${event.type} (subscription ${subscription.id})`
             ),
-            cancel_at_period_end: subscription.cancel_at_period_end ?? false
+            cancel_at_period_end: isScheduledToCancel(subscription)
           })
           .eq('stripe_customer_id', subscription.customer);
 
