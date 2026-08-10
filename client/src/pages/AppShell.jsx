@@ -27,6 +27,7 @@ function AppShell() {
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [saveUpgradeUrl, setSaveUpgradeUrl] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
@@ -671,6 +672,7 @@ function AppShell() {
 
     setSaveLoading(true);
     setSaveError('');
+    setSaveUpgradeUrl('');
     setSaveSuccess(false);
 
     try {
@@ -685,6 +687,14 @@ function AppShell() {
 
       const saveData = await saveResponse.json().catch(() => ({}));
       if (!saveResponse.ok) {
+        // Free tier's monthly document cap (see documents.js) -- shown as
+        // the server's own message plus an upgrade link, not folded into
+        // the generic error path below.
+        if (saveData?.error === 'free_tier_limit_reached') {
+          setSaveError(saveData.message || t('dashboard_saveErrorGeneric'));
+          setSaveUpgradeUrl(saveData.upgradeUrl || '/app/billing');
+          return;
+        }
         throw new Error(saveData?.error || 'Failed to save document');
       }
 
@@ -1312,7 +1322,17 @@ function AppShell() {
                       }}
                       rows={10}
                     />
-                    {saveError && <p className="auth-error">{saveError}</p>}
+                    {saveError && (
+                      <p className="auth-error">
+                        {saveError}
+                        {saveUpgradeUrl && (
+                          <>
+                            {' '}
+                            <Link to={saveUpgradeUrl}>{t('dashboard_upgradeLink')}</Link>
+                          </>
+                        )}
+                      </p>
+                    )}
                     {saveSuccess && <p className="save-success">{t('dashboard_saveSuccess')}</p>}
                     <button className="btn-primary generate-action" onClick={saveDocument} disabled={saveLoading}>
                       {saveLoading ? t('dashboard_saving') : t('dashboard_saveDocument')}
