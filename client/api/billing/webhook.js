@@ -87,6 +87,108 @@ async function revertToFreePlan(supabase, subscription, context) {
   }
 }
 
+// Narrower than the "unlimited documents" isActivePaidPlan check used
+// elsewhere (documents.js) -- org provisioning is Firm-only, Pro doesn't
+// get a team.
+function isActiveFirmPlan(plan, status) {
+  return plan === 'firm' && (status === 'active' || status === 'trialing');
+}
+
+// Phase 1 of team-member support: silently provisions a Firm owner's
+// organization the same way the subscriptions row itself is silently
+// provisioned -- no explicit setup step. Only creates; never
+// demotes/deletes an org on downgrade or cancellation -- membership rows
+// persist even if the owner drops back to Free, since revoking org-wide
+// *access* on lapse is a query-level concern (Phase 2), not this table's
+// existence.
+//
+// Idempotency: Stripe redelivers webhook events, so this must tolerate
+// being called twice for the same user. The existence check below covers
+// the normal case; the unique index on organizations.owner_user_id
+// (005_add_organizations.sql) covers a genuine concurrent-delivery race by
+// turning a second insert into a clean constraint violation (code 23505)
+// instead of a duplicate row.
+async function provisionFirmOrgIfNeeded(supabase, userId, plan, status, context) {
+  if (!isActiveFirmPlan(plan, status)) return;
+
+  try {
+    const { data: existingOrg, error: existingOrgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('owner_user_id', userId)
+      .maybeSingle();
+
+    if (existingOrgError) {
+      console.error(`Failed to check for existing org on ${context}:`, existingOrgError);
+      return;
+    }
+
+    if (existingOrg) {
+      // Already provisioned -- redelivered/duplicate event, no-op.
+      return;
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+    if (userError || !userData?.user?.email) {
+      console.error(`Failed to look up user for org provisioning on ${context}:`, userError);
+      return;
+    }
+
+    const { data: newOrg, error: insertOrgError } = await supabase
+      .from('organizations')
+      .insert({ name: `${userData.user.email}'s Firm`, owner_user_id: userId })
+      .select('id')
+      .single();
+
+    if (insertOrgError) {
+      if (insertOrgError.code === '23505') {
+        console.warn(`Org already provisioned for user ${userId} (race on ${context}), skipping.`);
+        return;
+      }
+      console.error(`Failed to create organization on ${context}:`, insertOrgError);
+      return;
+    }
+
+    const { error: memberError } = await supabase
+      .from('organization_members')
+      .insert({ org_id: newOrg.id, user_id: userId, role: 'owner' });
+
+    if (memberError) {
+      console.error(`Failed to add owner membership on ${context}:`, memberError);
+      return;
+    }
+
+    // Backfill: the owner's pre-existing clients/documents move into the
+    // new org so they're visible to teammates once any get added
+    // (Phase 2/3). Scoped to org_id is null so this never overwrites a
+    // row that (in some future flow) already belongs to a different org.
+    const { error: clientsBackfillError } = await supabase
+      .from('clients')
+      .update({ org_id: newOrg.id })
+      .eq('user_id', userId)
+      .is('org_id', null);
+
+    if (clientsBackfillError) {
+      console.error(`Failed to backfill org_id on clients on ${context}:`, clientsBackfillError);
+    }
+
+    const { error: documentsBackfillError } = await supabase
+      .from('documents')
+      .update({ org_id: newOrg.id })
+      .eq('user_id', userId)
+      .is('org_id', null);
+
+    if (documentsBackfillError) {
+      console.error(`Failed to backfill org_id on documents on ${context}:`, documentsBackfillError);
+    }
+  } catch (error) {
+    // Org provisioning is best-effort and must never fail the webhook
+    // itself -- the subscriptions write that already succeeded above must
+    // not be retried (and re-applied) just because this step failed.
+    console.error(`Unexpected error during org provisioning on ${context}:`, error);
+  }
+}
+
 export default async function handler(req, res) {
   const missingVars = [
     'SUPABASE_URL',
@@ -150,6 +252,8 @@ export default async function handler(req, res) {
 
         if (error) {
           console.error('Failed to upsert subscription on checkout.session.completed:', error);
+        } else {
+          await provisionFirmOrgIfNeeded(supabase, userId, plan, subscription.status, event.type);
         }
         break;
       }
@@ -178,7 +282,7 @@ export default async function handler(req, res) {
 
         const plan = resolvePlanFromPriceId(subscription.items.data[0]?.price?.id);
 
-        const { error } = await supabase
+        const { data: updatedSubscription, error } = await supabase
           .from('subscriptions')
           .update({
             stripe_subscription_id: subscription.id,
@@ -190,10 +294,17 @@ export default async function handler(req, res) {
             ),
             cancel_at_period_end: isScheduledToCancel(subscription)
           })
-          .eq('stripe_customer_id', subscription.customer);
+          .eq('stripe_customer_id', subscription.customer)
+          .select('user_id')
+          .maybeSingle();
 
         if (error) {
           console.error(`Failed to update subscription on ${event.type}:`, error);
+        } else if (updatedSubscription?.user_id) {
+          // Unlike checkout.session.completed, this event only carries the
+          // Stripe customer id, not our user_id -- read it back off the row
+          // the update above just matched via stripe_customer_id.
+          await provisionFirmOrgIfNeeded(supabase, updatedSubscription.user_id, plan, subscription.status, event.type);
         }
         break;
       }
