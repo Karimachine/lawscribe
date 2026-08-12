@@ -1,11 +1,12 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { getOrgAccessContext } from './_lib/org.js';
 
-// Team management for Firm orgs (Phase 2 of team-member support). No
-// frontend UI consumes this yet -- that's Phase 3. Flat file, dispatched
-// by HTTP method rather than a query-string id (there's no natural single
-// resource id shared across GET/add/remove the way ?id=... works for
-// clients.js/documents.js -- DELETE takes the target member's user_id in
-// the body instead).
+// Team management for Firm orgs (Phase 2 of team-member support; the
+// GET response's org.active field is Phase 3.5, see below). Flat file,
+// dispatched by HTTP method rather than a query-string id (there's no
+// natural single resource id shared across GET/add/remove the way
+// ?id=... works for clients.js/documents.js -- DELETE takes the target
+// member's user_id in the body instead).
 //
 // GET is open to any member of an org (owner or not) so they can see
 // their own team -- it deliberately does NOT gate on the org owner's
@@ -86,7 +87,22 @@ export default async function handler(req, res) {
       })
     );
 
-    return res.status(200).json({ org: { id: membership.org_id }, members });
+    // Phase 3.5: expose whether shared data access is currently active,
+    // via the exact same getOrgAccessContext already used (and tested) in
+    // clients.js/documents.js -- reused verbatim rather than
+    // reimplemented, so "active" means precisely the same thing
+    // everywhere. This is a second membership lookup on top of
+    // getRequesterMembership's own above (a small, deliberate redundancy
+    // in exchange for reusing the tested helper as-is). GET /api/team
+    // itself still isn't gated by it -- the roster is always visible
+    // regardless -- only the response now also reports the flag, for the
+    // frontend's paused-access banner.
+    const orgAccessContext = await getOrgAccessContext(supabase, user.id);
+
+    return res.status(200).json({
+      org: { id: membership.org_id, active: orgAccessContext?.active === true },
+      members
+    });
   }
 
   if (req.method === 'POST') {

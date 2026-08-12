@@ -1186,13 +1186,10 @@ function AppShell() {
   const isTeamOwner = myMembership?.role === 'owner';
   const memberEmailByUserId = Object.fromEntries(teamMembers.map((member) => [member.user_id, member.email]));
 
-  // Reliable only for the owner -- their own subscription (already loaded
-  // for the Billing page, same isActivePaidPlan definition used
-  // server-side in _lib/plan.js) *is* the org's shared-access state. A
-  // non-owner member has no subscription row of their own and RLS
-  // correctly blocks them from reading the owner's, so this can't be
-  // computed for a member from the frontend alone -- the paused banner
-  // below is therefore owner-only, not shown to members at all.
+  // Owner path: their own subscription (already loaded for the Billing
+  // page, same isActivePaidPlan definition used server-side in
+  // _lib/plan.js) *is* the org's shared-access state -- reliable without
+  // any backend change, computed the same way it always has been.
   const ownerOrgActive =
     isTeamOwner &&
     Boolean(
@@ -1200,7 +1197,15 @@ function AppShell() {
         (subscription.status === 'active' || subscription.status === 'trialing') &&
         (subscription.plan === 'pro' || subscription.plan === 'firm')
     );
-  const showPausedBanner = hasTeam && isTeamOwner && !ownerOrgActive;
+  // Member path (Phase 3.5): a non-owner member has no subscription row
+  // of their own and RLS correctly blocks them from reading the owner's,
+  // so this can only come from the server -- team.js's GET response now
+  // includes org.active, computed there via the same getOrgAccessContext
+  // used by clients.js/documents.js.
+  const showOwnerPausedBanner = hasTeam && isTeamOwner && !ownerOrgActive;
+  const showMemberPausedBanner = hasTeam && !isTeamOwner && teamOrg?.active === false;
+  const showPausedBanner = showOwnerPausedBanner || showMemberPausedBanner;
+  const orgOwnerEmail = teamMembers.find((member) => member.role === 'owner')?.email;
 
   // Derived straight from the rows actually returned by the API, not from
   // a guessed "is sharing active" flag -- so it's never wrong: if access
@@ -1462,7 +1467,16 @@ function AppShell() {
 
             {showPausedBanner && (
               <div className="team-paused-banner">
-                {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+                {isTeamOwner ? (
+                  <>
+                    {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+                  </>
+                ) : (
+                  <>
+                    {t('team_pausedBannerMemberPrefix')} {orgOwnerEmail || t('team_unknownOwner')}{' '}
+                    {t('team_pausedBannerMemberSuffix')}
+                  </>
+                )}
               </div>
             )}
 
@@ -1637,7 +1651,16 @@ function AppShell() {
 
             {showPausedBanner && (
               <div className="team-paused-banner">
-                {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+                {isTeamOwner ? (
+                  <>
+                    {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+                  </>
+                ) : (
+                  <>
+                    {t('team_pausedBannerMemberPrefix')} {orgOwnerEmail || t('team_unknownOwner')}{' '}
+                    {t('team_pausedBannerMemberSuffix')}
+                  </>
+                )}
               </div>
             )}
 

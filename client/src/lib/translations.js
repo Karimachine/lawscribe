@@ -238,7 +238,10 @@ export const translations = {
     team_addedByLabel: 'Added by',
     team_unknownMember: 'a team member',
     team_pausedBanner: 'Shared team access is currently paused. Resubscribe to Firm to restore it for your team.',
-    team_pausedBannerLink: 'Manage billing'
+    team_pausedBannerLink: 'Manage billing',
+    team_pausedBannerMemberPrefix: 'Shared team access is currently paused.',
+    team_pausedBannerMemberSuffix: 'needs an active Firm subscription to restore it.',
+    team_unknownOwner: 'The team owner'
   },
   es: {
     common_cancel: 'Cancelar',
@@ -476,7 +479,10 @@ export const translations = {
     team_addedByLabel: 'Añadido por',
     team_unknownMember: 'un miembro del equipo',
     team_pausedBanner: 'El acceso compartido del equipo está pausado actualmente. Renueva tu suscripción Firm para restaurarlo.',
-    team_pausedBannerLink: 'Gestionar facturación'
+    team_pausedBannerLink: 'Gestionar facturación',
+    team_pausedBannerMemberPrefix: 'El acceso compartido del equipo está pausado actualmente.',
+    team_pausedBannerMemberSuffix: 'necesita una suscripción Firm activa para restaurarlo.',
+    team_unknownOwner: 'El propietario del equipo'
   }
 };
 
