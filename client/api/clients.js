@@ -1,5 +1,6 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
 import { parsePagination } from './_lib/pagination.js';
+import { getOrgAccessContext } from './_lib/org.js';
 
 // Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
 // catch-all -- Vercel's zero-config "Other" framework detection doesn't
@@ -33,6 +34,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Resolved once per request, reused across every branch below. See
+  // documents.js for the identical pattern and reasoning.
+  const orgContext = await getOrgAccessContext(supabase, user.id);
+  const orgActive = orgContext?.active === true;
+
   const rawId = req.query.id;
   if (Array.isArray(rawId) && rawId.length > 1) {
     // e.g. ?id=a&id=b -- ambiguous, reject rather than guessing.
@@ -44,12 +50,11 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { page, limit, from, to } = parsePagination(req.query);
 
-      const { data, error, count } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      // Org-active: any member sees every org client, not just their own.
+      let clientsQuery = supabase.from('clients').select('*', { count: 'exact' });
+      clientsQuery = orgActive ? clientsQuery.eq('org_id', orgContext.orgId) : clientsQuery.eq('user_id', user.id);
+
+      const { data, error, count } = await clientsQuery.order('created_at', { ascending: false }).range(from, to);
 
       if (error) {
         console.error('Supabase fetch error:', error);
@@ -77,6 +82,9 @@ export default async function handler(req, res) {
         phone: phone || null,
         case_type: case_type || null
       };
+      if (orgActive) {
+        insert.org_id = orgContext.orgId;
+      }
 
       const { data, error } = await supabase.from('clients').insert([insert]).select().single();
       if (error) {
@@ -102,7 +110,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Name is required.' });
     }
 
-    const { data, error } = await supabase
+    // Org-active: any org member can update any org client. Otherwise
+    // unchanged -- only the creator can.
+    let updateQuery = supabase
       .from('clients')
       .update({
         name,
@@ -110,10 +120,10 @@ export default async function handler(req, res) {
         phone: phone || null,
         case_type: case_type || null
       })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select()
-      .single();
+      .eq('id', id);
+    updateQuery = orgActive ? updateQuery.eq('org_id', orgContext.orgId) : updateQuery.eq('user_id', user.id);
+
+    const { data, error } = await updateQuery.select().single();
 
     if (error || !data) {
       console.error('Supabase update error:', error);
@@ -124,11 +134,12 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+    // Org-active: any org member can delete any org client. Otherwise
+    // unchanged -- only the creator can.
+    let deleteQuery = supabase.from('clients').delete().eq('id', id);
+    deleteQuery = orgActive ? deleteQuery.eq('org_id', orgContext.orgId) : deleteQuery.eq('user_id', user.id);
+
+    const { error } = await deleteQuery;
 
     if (error) {
       console.error('Supabase delete error:', {

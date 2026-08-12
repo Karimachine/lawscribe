@@ -1,5 +1,7 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
 import { parsePagination } from './_lib/pagination.js';
+import { isActivePaidPlan } from './_lib/plan.js';
+import { getOrgAccessContext } from './_lib/org.js';
 
 // Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
 // catch-all -- Vercel's zero-config "Other" framework detection doesn't
@@ -27,19 +29,6 @@ function resolveId(rawId) {
 // since it never writes a row.
 const FREE_TIER_MONTHLY_DOCUMENT_LIMIT = 3;
 
-// Mirrors the isActivePaidPlan check in PricingSection.jsx: unlimited
-// documents require an *active* paid plan, not merely a non-'free' plan
-// value. A null/undefined plan (e.g. between Stripe customer creation and
-// completed checkout) or a canceled/past_due paid subscription is treated
-// as free-tier-limited, same as an explicit plan: 'free'.
-function isActivePaidPlan(subscription) {
-  return Boolean(
-    subscription &&
-      (subscription.status === 'active' || subscription.status === 'trialing') &&
-      (subscription.plan === 'pro' || subscription.plan === 'firm')
-  );
-}
-
 // UTC calendar month boundary -- resets on the 1st, not a rolling 30 days.
 // Simplest correct window: one comparison against a fixed boundary, no
 // per-document math, and matches how "3 documents/month" reads on the
@@ -63,6 +52,14 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Resolved once per request, reused across every branch below. null for
+  // a solo user (no org); `active: false` for an org member whose org
+  // owner's subscription has lapsed -- either way, orgActive being false
+  // means "fall back to plain user_id-scoped behavior", identical to how
+  // this route worked before team support existed.
+  const orgContext = await getOrgAccessContext(supabase, user.id);
+  const orgActive = orgContext?.active === true;
+
   const rawId = req.query.id;
   if (Array.isArray(rawId) && rawId.length > 1) {
     // e.g. ?id=a&id=b -- ambiguous, reject rather than guessing.
@@ -74,12 +71,14 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { page, limit, from, to } = parsePagination(req.query);
 
-      const { data, error, count } = await supabase
-        .from('documents')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      // Org-active: any member sees every org document, not just their
+      // own. Otherwise unchanged -- scoped to the requester's own rows.
+      let documentsQuery = supabase.from('documents').select('*', { count: 'exact' });
+      documentsQuery = orgActive
+        ? documentsQuery.eq('org_id', orgContext.orgId)
+        : documentsQuery.eq('user_id', user.id);
+
+      const { data, error, count } = await documentsQuery.order('created_at', { ascending: false }).range(from, to);
 
       if (error) {
         console.error('Supabase fetch error:', error);
@@ -100,39 +99,49 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Prompt and content are required.' });
       }
 
-      const { data: subscription, error: subscriptionError } = await supabase
-        .from('subscriptions')
-        .select('plan, status')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (subscriptionError) {
-        console.error('Failed to check subscription for document limit:', subscriptionError);
-        return res.status(500).json({ error: 'Unable to save document' });
-      }
-
-      if (!isActivePaidPlan(subscription)) {
-        // Live count, not a stored counter -- a deleted document (hard
-        // delete, no soft-delete column) simply no longer exists and no
-        // longer counts. Accepted trade-off: this is a fair-use gate, not
-        // an anti-abuse system, and needs no schema migration.
-        const { count, error: countError } = await supabase
-          .from('documents')
-          .select('id', { count: 'exact', head: true })
+      // An active org shares its owner's unlimited-document status --
+      // orgs are only ever provisioned for an active Firm subscription
+      // (webhook.js), and Firm is unlimited regardless of who on the team
+      // is saving. Skip the individual subscription/count check entirely
+      // in that case: checking the *requesting* member's own subscription
+      // would be wrong here, since a non-owner member typically has no
+      // subscription row of their own at all and would otherwise be
+      // incorrectly treated as free-tier-limited.
+      if (!orgActive) {
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from('subscriptions')
+          .select('plan, status')
           .eq('user_id', user.id)
-          .gte('created_at', startOfCurrentUtcMonth());
+          .maybeSingle();
 
-        if (countError) {
-          console.error('Failed to count documents for free tier limit:', countError);
+        if (subscriptionError) {
+          console.error('Failed to check subscription for document limit:', subscriptionError);
           return res.status(500).json({ error: 'Unable to save document' });
         }
 
-        if ((count ?? 0) >= FREE_TIER_MONTHLY_DOCUMENT_LIMIT) {
-          return res.status(403).json({
-            error: 'free_tier_limit_reached',
-            message: "You've used all 3 free documents this month.",
-            upgradeUrl: '/app/billing'
-          });
+        if (!isActivePaidPlan(subscription)) {
+          // Live count, not a stored counter -- a deleted document (hard
+          // delete, no soft-delete column) simply no longer exists and no
+          // longer counts. Accepted trade-off: this is a fair-use gate, not
+          // an anti-abuse system, and needs no schema migration.
+          const { count, error: countError } = await supabase
+            .from('documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .gte('created_at', startOfCurrentUtcMonth());
+
+          if (countError) {
+            console.error('Failed to count documents for free tier limit:', countError);
+            return res.status(500).json({ error: 'Unable to save document' });
+          }
+
+          if ((count ?? 0) >= FREE_TIER_MONTHLY_DOCUMENT_LIMIT) {
+            return res.status(403).json({
+              error: 'free_tier_limit_reached',
+              message: "You've used all 3 free documents this month.",
+              upgradeUrl: '/app/billing'
+            });
+          }
         }
       }
 
@@ -142,6 +151,11 @@ export default async function handler(req, res) {
         prompt,
         content
       };
+      // org_id stays null (default, same as before team support) unless
+      // the requester belongs to a currently-active org.
+      if (orgActive) {
+        insert.org_id = orgContext.orgId;
+      }
 
       const { data, error } = await supabase.from('documents').insert([insert]).select().single();
       if (error) {
@@ -167,17 +181,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Prompt and content are required.' });
     }
 
-    const { data, error } = await supabase
+    // Org-active: any org member can update any org document, not just
+    // its creator. Otherwise unchanged -- only the creator can.
+    let updateQuery = supabase
       .from('documents')
       .update({
         title: title || 'Generated Document',
         prompt,
         content
       })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select()
-      .single();
+      .eq('id', id);
+    updateQuery = orgActive ? updateQuery.eq('org_id', orgContext.orgId) : updateQuery.eq('user_id', user.id);
+
+    const { data, error } = await updateQuery.select().single();
 
     if (error || !data) {
       console.error('Supabase update error:', error);
@@ -188,11 +204,12 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+    // Org-active: any org member can delete any org document. Otherwise
+    // unchanged -- only the creator can.
+    let deleteQuery = supabase.from('documents').delete().eq('id', id);
+    deleteQuery = orgActive ? deleteQuery.eq('org_id', orgContext.orgId) : deleteQuery.eq('user_id', user.id);
+
+    const { error } = await deleteQuery;
 
     if (error) {
       console.error('Supabase delete error:', {

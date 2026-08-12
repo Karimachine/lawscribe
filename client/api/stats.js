@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { getOrgAccessContext } from './_lib/org.js';
 
 export default async function handler(req, res) {
   const missingVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter((name) => !process.env[name]);
@@ -15,16 +16,24 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const [documentsResult, clientsResult] = await Promise.all([
-      supabase
-        .from('documents')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id),
-      supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-    ]);
+    // Org-active: counts are org-wide (every member's documents/clients
+    // count toward the same total), matching what the list endpoints now
+    // return in that state. Otherwise unchanged -- per-user.
+    const orgContext = await getOrgAccessContext(supabase, user.id);
+    const orgActive = orgContext?.active === true;
+
+    let documentsQuery = supabase.from('documents').select('*', { count: 'exact', head: true });
+    let clientsQuery = supabase.from('clients').select('*', { count: 'exact', head: true });
+
+    if (orgActive) {
+      documentsQuery = documentsQuery.eq('org_id', orgContext.orgId);
+      clientsQuery = clientsQuery.eq('org_id', orgContext.orgId);
+    } else {
+      documentsQuery = documentsQuery.eq('user_id', user.id);
+      clientsQuery = clientsQuery.eq('user_id', user.id);
+    }
+
+    const [documentsResult, clientsResult] = await Promise.all([documentsQuery, clientsQuery]);
 
     if (documentsResult.error) {
       console.error('Supabase count error (documents):', documentsResult.error);
