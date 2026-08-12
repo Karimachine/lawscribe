@@ -29,6 +29,7 @@ function App() {
           <Route path="/app/clients" element={<AppShell />} />
           <Route path="/app/keys" element={<AppShell />} />
           <Route path="/app/billing" element={<AppShell />} />
+          <Route path="/app/team" element={<AppShell />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </ErrorBoundary>

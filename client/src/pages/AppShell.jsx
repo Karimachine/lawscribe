@@ -98,6 +98,21 @@ function AppShell() {
   const [subscriptionError, setSubscriptionError] = useState('');
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState('');
+  // Team support (Phase 3, UI only -- backend from Phase 1/2). teamOrg is
+  // null for a solo user with no org; teamMembers is the full roster
+  // (email/role/joined) for whoever's org the logged-in user belongs to,
+  // used both by the Team page and by the creator-indicator lookups on
+  // the Clients/Documents lists below.
+  const [teamOrg, setTeamOrg] = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState('');
+  const [teamAddEmail, setTeamAddEmail] = useState('');
+  const [teamAddLoading, setTeamAddLoading] = useState(false);
+  const [teamAddError, setTeamAddError] = useState('');
+  const [teamAddSuccess, setTeamAddSuccess] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState(null);
+  const [teamRemoveError, setTeamRemoveError] = useState(null);
   const settingsRef = useRef(null);
   const revokeSuccessTimeoutRef = useRef(null);
   const clientSuccessTimeoutRef = useRef(null);
@@ -221,6 +236,34 @@ function AppShell() {
     }
   };
 
+  // org: null for a solo user (never shown a Team nav tab/page at all --
+  // see hasTeam below). members carries email/role/joined_at for the
+  // caller's own org, reused for both the Team page and the
+  // "Added by <email>" indicators on Clients/Documents.
+  const loadTeam = async (token) => {
+    setTeamLoading(true);
+    setTeamError('');
+    try {
+      const response = await fetch('/api/team', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTeamOrg(data.org || null);
+        setTeamMembers(data.members || []);
+      } else {
+        setTeamError(t('team_loadErrorGeneric'));
+      }
+    } catch (error) {
+      console.error('Failed to load team', error);
+      setTeamError(t('team_loadErrorGeneric'));
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
   // Idempotent: only actually inserts a row the first time it's called for
   // a given user (see create-free-subscription.js). Called on every
   // session establish, not just right after signUp(), because signUp()
@@ -252,7 +295,13 @@ function AppShell() {
             loadClients(token),
             loadStats(token),
             loadApiKeys(token),
-            ensureFreePlan(token)
+            ensureFreePlan(token),
+            loadTeam(token),
+            // Loaded broadly (not just on /app/billing, see the pathname-
+            // gated effect below) so the Team-owner "shared access paused"
+            // banner on Clients/Documents can compute ownerOrgActive
+            // wherever the owner happens to be in the app.
+            loadSubscription()
           ]);
         }
       } catch (error) {
@@ -271,7 +320,9 @@ function AppShell() {
           loadClients(session.access_token),
           loadStats(session.access_token),
           loadApiKeys(session.access_token),
-          ensureFreePlan(session.access_token)
+          ensureFreePlan(session.access_token),
+          loadTeam(session.access_token),
+          loadSubscription()
         ]);
       } else {
         setSavedDocs([]);
@@ -295,6 +346,13 @@ function AppShell() {
         setDocUpdateSuccessId(null);
         setSubscription(null);
         setSubscriptionError('');
+        setTeamOrg(null);
+        setTeamMembers([]);
+        setTeamError('');
+        setTeamAddEmail('');
+        setTeamAddError('');
+        setTeamAddSuccess(false);
+        setTeamRemoveError(null);
       }
     });
 
@@ -476,6 +534,13 @@ function AppShell() {
     setDocDeleteError(null);
     setDocUpdateSuccessId(null);
     setSettingsOpen(false);
+    setTeamOrg(null);
+    setTeamMembers([]);
+    setTeamError('');
+    setTeamAddEmail('');
+    setTeamAddError('');
+    setTeamAddSuccess(false);
+    setTeamRemoveError(null);
     navigate('/login');
   };
 
@@ -1003,6 +1068,90 @@ function AppShell() {
     }
   };
 
+  const submitAddTeamMember = async () => {
+    if (!session?.access_token) return;
+
+    const email = teamAddEmail.trim();
+    if (!email) {
+      setTeamAddError(t('team_addErrorGeneric'));
+      return;
+    }
+
+    setTeamAddLoading(true);
+    setTeamAddError('');
+    setTeamAddSuccess(false);
+
+    try {
+      const response = await fetch('/api/team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        // Map the two known error cases to clear messages; anything else
+        // falls back to a generic message rather than showing raw
+        // server error text.
+        if (data?.error === 'user_not_found') {
+          setTeamAddError(t('team_addErrorUserNotFound'));
+        } else if (data?.error === 'already_member') {
+          setTeamAddError(t('team_addErrorAlreadyMember'));
+        } else {
+          setTeamAddError(t('team_addErrorGeneric'));
+        }
+        return;
+      }
+
+      setTeamAddEmail('');
+      setTeamAddSuccess(true);
+      await loadTeam(session.access_token);
+    } catch (error) {
+      console.error('Failed to add team member', error);
+      setTeamAddError(t('team_addErrorGeneric'));
+    } finally {
+      setTeamAddLoading(false);
+    }
+  };
+
+  const removeTeamMember = async (memberUserId) => {
+    // Same confirm-before-destructive-action pattern as client/document
+    // delete and key revoke above.
+    if (!window.confirm(t('team_confirmRemove'))) {
+      return;
+    }
+
+    if (!session?.access_token) return;
+
+    setRemovingMemberId(memberUserId);
+    setTeamRemoveError(null);
+
+    try {
+      const response = await fetch('/api/team', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ user_id: memberUserId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove team member');
+      }
+
+      await loadTeam(session.access_token);
+    } catch (error) {
+      console.error('Failed to remove team member', error);
+      setTeamRemoveError({ id: memberUserId, message: t('team_removeErrorGeneric') });
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
+
   const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : 'Never');
 
   const clientsTotalPages = Math.max(1, Math.ceil(clientsTotal / LIST_PAGE_LIMIT));
@@ -1025,7 +1174,44 @@ function AppShell() {
   const isClients = location.pathname === '/app/clients';
   const isApiKeys = location.pathname === '/app/keys';
   const isBilling = location.pathname === '/app/billing';
+  const isTeam = location.pathname === '/app/team';
   const currentPlan = plans.find((plan) => plan.id === subscription?.plan) || plans[0];
+
+  // hasTeam gates the nav tab entirely -- a user who never belongs to an
+  // org never sees an empty Team page. isTeamOwner drives the
+  // add/remove-member controls (never relies on the backend's 403 alone --
+  // the UI simply doesn't offer an action that would fail for a non-owner).
+  const hasTeam = Boolean(teamOrg);
+  const myMembership = teamMembers.find((member) => member.user_id === user?.id);
+  const isTeamOwner = myMembership?.role === 'owner';
+  const memberEmailByUserId = Object.fromEntries(teamMembers.map((member) => [member.user_id, member.email]));
+
+  // Reliable only for the owner -- their own subscription (already loaded
+  // for the Billing page, same isActivePaidPlan definition used
+  // server-side in _lib/plan.js) *is* the org's shared-access state. A
+  // non-owner member has no subscription row of their own and RLS
+  // correctly blocks them from reading the owner's, so this can't be
+  // computed for a member from the frontend alone -- the paused banner
+  // below is therefore owner-only, not shown to members at all.
+  const ownerOrgActive =
+    isTeamOwner &&
+    Boolean(
+      subscription &&
+        (subscription.status === 'active' || subscription.status === 'trialing') &&
+        (subscription.plan === 'pro' || subscription.plan === 'firm')
+    );
+  const showPausedBanner = hasTeam && isTeamOwner && !ownerOrgActive;
+
+  // Derived straight from the rows actually returned by the API, not from
+  // a guessed "is sharing active" flag -- so it's never wrong: if access
+  // is currently paused, the API has already narrowed the list to the
+  // caller's own rows server-side (Phase 2), and this just labels them.
+  const creatorLabel = (rowUserId) => {
+    if (!hasTeam) return null;
+    if (rowUserId === user?.id) return t('team_addedByYou');
+    const email = memberEmailByUserId[rowUserId];
+    return `${t('team_addedByLabel')} ${email || t('team_unknownMember')}`;
+  };
 
   return (
     <div className="app-shell">
@@ -1059,6 +1245,11 @@ function AppShell() {
           <button className="nav-link" onClick={() => guardedNavigate('/app/billing')}>
             {t('nav_billing')}
           </button>
+          {hasTeam && (
+            <button className="nav-link" onClick={() => guardedNavigate('/app/team')}>
+              {t('nav_team')}
+            </button>
+          )}
           {user ? (
             <button className="nav-cta" onClick={signOut}>
               {t('nav_signOut')}
@@ -1269,6 +1460,12 @@ function AppShell() {
               </div>
             </div>
 
+            {showPausedBanner && (
+              <div className="team-paused-banner">
+                {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+              </div>
+            )}
+
             {statsError ? (
               <div className="stats-grid">
                 <div className="stat-card">
@@ -1381,6 +1578,7 @@ function AppShell() {
                         <li key={doc.id}>
                           <div>
                             <strong>{doc.title}</strong>
+                            {hasTeam && <div className="creator-note">{creatorLabel(doc.user_id)}</div>}
                             {docUpdateSuccessId === doc.id && <p className="save-success">{t('dashboard_docUpdateSuccess')}</p>}
                             {docDeleteError?.id === doc.id && <p className="auth-error">{docDeleteError.message}</p>}
                           </div>
@@ -1437,6 +1635,12 @@ function AppShell() {
               </div>
             </div>
 
+            {showPausedBanner && (
+              <div className="team-paused-banner">
+                {t('team_pausedBanner')} <Link to="/app/billing">{t('team_pausedBannerLink')}</Link>
+              </div>
+            )}
+
             <div className="clients-grid">
               <div className="client-panel">
                 <h3>{editingClientId ? t('clients_editTitle') : t('clients_addTitle')}</h3>
@@ -1485,6 +1689,7 @@ function AppShell() {
                           <strong>{client.name}</strong>
                           <div>{client.email}</div>
                           <div>{client.phone}</div>
+                          {hasTeam && <div className="creator-note">{creatorLabel(client.user_id)}</div>}
                         </div>
                         <div className="auth-actions">
                           <button className="btn-secondary" onClick={() => startEditClient(client)}>
@@ -1694,6 +1899,86 @@ function AppShell() {
                       </button>
                     </div>
                   </>
+                )}
+                {isTeamOwner && (
+                  <p>
+                    <Link to="/app/team">{t('billing_manageTeamLink')}</Link>
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {isTeam && (
+          <section className="clients-page">
+            <div className="page-header">
+              <div>
+                <span className="section-label">{t('team_label')}</span>
+                <h2>{t('team_title')}</h2>
+                <p>{t('team_subtitle')}</p>
+              </div>
+            </div>
+
+            <div className="clients-grid">
+              <div className="client-panel">
+                <h3>{t('team_membersTitle')}</h3>
+                {teamLoading ? (
+                  <p>{t('common_loading')}</p>
+                ) : teamError ? (
+                  <div>
+                    <p className="auth-error">{teamError}</p>
+                    <button onClick={() => loadTeam(session.access_token)}>{t('common_tryAgain')}</button>
+                  </div>
+                ) : (
+                  <ul className="client-list">
+                    {teamMembers.map((member) => (
+                      <li key={member.user_id}>
+                        <div>
+                          <strong>{member.email}</strong>
+                          <div>
+                            <span className={`role-badge ${member.role === 'owner' ? 'role-badge-owner' : ''}`}>
+                              {member.role === 'owner' ? t('team_roleOwner') : t('team_roleMember')}
+                            </span>
+                          </div>
+                          <div>
+                            {t('team_joinedLabel')} {formatDate(member.created_at)}
+                          </div>
+                          {teamRemoveError?.id === member.user_id && (
+                            <p className="auth-error">{teamRemoveError.message}</p>
+                          )}
+                        </div>
+                        {isTeamOwner && member.role !== 'owner' && (
+                          <button
+                            className="danger"
+                            disabled={removingMemberId === member.user_id}
+                            onClick={() => removeTeamMember(member.user_id)}
+                          >
+                            {removingMemberId === member.user_id ? t('team_removing') : t('team_removeButton')}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="client-panel">
+                {isTeamOwner ? (
+                  <>
+                    <h3>{t('team_addTitle')}</h3>
+                    <label>{t('team_addEmailLabel')}</label>
+                    <input type="email" value={teamAddEmail} onChange={(e) => setTeamAddEmail(e.target.value)} />
+                    {teamAddError && <p className="auth-error">{teamAddError}</p>}
+                    {teamAddSuccess && <p className="save-success">{t('team_addSuccess')}</p>}
+                    <div className="auth-actions">
+                      <button className="btn-primary" disabled={teamAddLoading} onClick={submitAddTeamMember}>
+                        {teamAddLoading ? t('team_adding') : t('team_addButton')}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p>{t('team_readOnlyNote')}</p>
                 )}
               </div>
             </div>

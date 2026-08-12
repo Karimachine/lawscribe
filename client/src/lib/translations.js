@@ -16,6 +16,7 @@ export const translations = {
     nav_clients: 'Clients',
     nav_apiKeys: 'API Keys',
     nav_billing: 'Billing',
+    nav_team: 'Team',
     nav_settings: 'Settings',
     nav_signOut: 'Sign out',
     nav_signIn: 'Sign in',
@@ -202,6 +203,7 @@ export const translations = {
     billing_manageButton: 'Manage subscription',
     billing_openingPortal: 'Opening…',
     billing_portalErrorGeneric: 'Unable to open the billing portal. Please try again.',
+    billing_manageTeamLink: 'Manage your team →',
 
     billingSuccess_title: 'Subscription successful',
     billingSuccess_body: "Thanks for subscribing! It may take a moment for your subscription to appear as active.",
@@ -209,7 +211,34 @@ export const translations = {
 
     billingCanceled_title: 'Checkout canceled',
     billingCanceled_body: "You weren't charged. You can restart checkout any time from the Billing page.",
-    billingCanceled_backToBilling: 'Back to Billing'
+    billingCanceled_backToBilling: 'Back to Billing',
+
+    team_label: 'Team',
+    team_title: 'Your team',
+    team_subtitle: "Manage who has access to your firm's shared clients and documents.",
+    team_loadErrorGeneric: 'Unable to load your team. Please try again.',
+    team_membersTitle: 'Team members',
+    team_roleOwner: 'Owner',
+    team_roleMember: 'Member',
+    team_joinedLabel: 'Joined',
+    team_readOnlyNote: 'Only the team owner can add or remove members.',
+    team_addTitle: 'Add a team member',
+    team_addEmailLabel: 'Email address',
+    team_addButton: 'Add to team',
+    team_adding: 'Adding…',
+    team_addSuccess: 'Added to your team.',
+    team_addErrorUserNotFound: 'This person needs to create a LawScribe account first, then you can add them.',
+    team_addErrorAlreadyMember: 'This person is already on your team.',
+    team_addErrorGeneric: 'Unable to add this team member. Please try again.',
+    team_removeButton: 'Remove',
+    team_removing: 'Removing…',
+    team_confirmRemove: 'Remove this person from your team? They will lose access to shared clients and documents.',
+    team_removeErrorGeneric: 'Unable to remove this team member. Please try again.',
+    team_addedByYou: 'Added by you',
+    team_addedByLabel: 'Added by',
+    team_unknownMember: 'a team member',
+    team_pausedBanner: 'Shared team access is currently paused. Resubscribe to Firm to restore it for your team.',
+    team_pausedBannerLink: 'Manage billing'
   },
   es: {
     common_cancel: 'Cancelar',
@@ -225,6 +254,7 @@ export const translations = {
     nav_clients: 'Clientes',
     nav_apiKeys: 'Claves API',
     nav_billing: 'Facturación',
+    nav_team: 'Equipo',
     nav_settings: 'Ajustes',
     nav_signOut: 'Cerrar sesión',
     nav_signIn: 'Iniciar sesión',
@@ -411,6 +441,7 @@ export const translations = {
     billing_manageButton: 'Administrar suscripción',
     billing_openingPortal: 'Abriendo…',
     billing_portalErrorGeneric: 'No se pudo abrir el portal de facturación. Inténtalo de nuevo.',
+    billing_manageTeamLink: 'Gestiona tu equipo →',
 
     billingSuccess_title: 'Suscripción exitosa',
     billingSuccess_body: 'Gracias por suscribirte. Puede tardar un momento en aparecer como activa.',
@@ -418,7 +449,34 @@ export const translations = {
 
     billingCanceled_title: 'Pago cancelado',
     billingCanceled_body: 'No se te cobró nada. Puedes reiniciar el pago cuando quieras desde la página de Facturación.',
-    billingCanceled_backToBilling: 'Volver a Facturación'
+    billingCanceled_backToBilling: 'Volver a Facturación',
+
+    team_label: 'Equipo',
+    team_title: 'Tu equipo',
+    team_subtitle: 'Administra quién tiene acceso a los clientes y documentos compartidos de tu firma.',
+    team_loadErrorGeneric: 'No se pudo cargar tu equipo. Inténtalo de nuevo.',
+    team_membersTitle: 'Miembros del equipo',
+    team_roleOwner: 'Propietario',
+    team_roleMember: 'Miembro',
+    team_joinedLabel: 'Se unió el',
+    team_readOnlyNote: 'Solo el propietario del equipo puede añadir o eliminar miembros.',
+    team_addTitle: 'Añadir un miembro al equipo',
+    team_addEmailLabel: 'Correo electrónico',
+    team_addButton: 'Añadir al equipo',
+    team_adding: 'Añadiendo…',
+    team_addSuccess: 'Añadido a tu equipo.',
+    team_addErrorUserNotFound: 'Esta persona debe crear una cuenta de LawScribe primero; luego podrás añadirla.',
+    team_addErrorAlreadyMember: 'Esta persona ya está en tu equipo.',
+    team_addErrorGeneric: 'No se pudo añadir a este miembro del equipo. Inténtalo de nuevo.',
+    team_removeButton: 'Eliminar',
+    team_removing: 'Eliminando…',
+    team_confirmRemove: '¿Eliminar a esta persona de tu equipo? Perderá acceso a los clientes y documentos compartidos.',
+    team_removeErrorGeneric: 'No se pudo eliminar a este miembro del equipo. Inténtalo de nuevo.',
+    team_addedByYou: 'Añadido por ti',
+    team_addedByLabel: 'Añadido por',
+    team_unknownMember: 'un miembro del equipo',
+    team_pausedBanner: 'El acceso compartido del equipo está pausado actualmente. Renueva tu suscripción Firm para restaurarlo.',
+    team_pausedBannerLink: 'Gestionar facturación'
   }
 };
 
