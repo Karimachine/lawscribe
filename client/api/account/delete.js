@@ -21,6 +21,54 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
+  // Guard against the FK violation this used to hit: organizations.owner_user_id
+  // references auth.users(id) with no ON DELETE clause, so the deleteUser()
+  // call at the end used to fail with a constraint violation -- after
+  // subscriptions/documents/clients/keys were already gone -- whenever this
+  // user still owned an org. Checked first, before anything is touched, so
+  // a blocked deletion never leaves partial state.
+  const { data: ownedOrg, error: ownedOrgError } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('owner_user_id', user.id)
+    .maybeSingle();
+
+  if (ownedOrgError) {
+    console.error('Failed to check organization ownership during account deletion:', ownedOrgError);
+    return res.status(500).json({ error: 'Unable to delete account' });
+  }
+
+  if (ownedOrg) {
+    const { count: otherMembersCount, error: otherMembersError } = await supabase
+      .from('organization_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('org_id', ownedOrg.id)
+      .neq('user_id', user.id);
+
+    if (otherMembersError) {
+      console.error('Failed to check org membership during account deletion:', otherMembersError);
+      return res.status(500).json({ error: 'Unable to delete account' });
+    }
+
+    if ((otherMembersCount ?? 0) > 0) {
+      return res.status(409).json({
+        error: 'org_has_members',
+        message: 'Remove all other team members before deleting your account.'
+      });
+    }
+
+    // Sole member of their own org (just the owner) -- safe to delete the
+    // org outright. This cascades to remove the lone organization_members
+    // row too (org_id references organizations(id) on delete cascade, see
+    // 005_add_organizations.sql), so deleteUser() below no longer hits the
+    // FK violation on organizations.owner_user_id.
+    const { error: deleteOrgError } = await supabase.from('organizations').delete().eq('id', ownedOrg.id);
+    if (deleteOrgError) {
+      console.error('Failed to delete organization during account deletion:', deleteOrgError);
+      return res.status(500).json({ error: 'Unable to delete account' });
+    }
+  }
+
   // Best-effort: cancel any live Stripe subscription so a deleted account
   // doesn't keep getting billed with no way left to manage it. Never blocks
   // account deletion -- if Stripe is unreachable or not configured, we log
