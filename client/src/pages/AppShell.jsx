@@ -8,6 +8,7 @@ import { languageOptions } from '../lib/translations';
 import PasswordInput from '../components/shared/PasswordInput';
 import { plans } from '../lib/plans';
 import { PENDING_CHECKOUT_PLAN_KEY } from '../components/home/PricingSection';
+import { validatePassword, formatPasswordErrors } from '../lib/passwordValidation';
 
 const LIST_PAGE_LIMIT = 20;
 
@@ -462,8 +463,20 @@ function AppShell() {
   };
 
   const signUp = async () => {
-    setAuthLoading(true);
     setAuthError('');
+
+    // Client-side only -- Supabase's own minimum is currently below this
+    // (see passwordValidation.js), so this is a UX improvement, not the
+    // actual enforcement boundary. Deliberately not applied to signIn():
+    // an existing account's password predates this rule and must not be
+    // rejected retroactively just because it's shorter or simpler.
+    const { valid, errors } = validatePassword(form.password, t);
+    if (!valid) {
+      setAuthError(formatPasswordErrors(errors, t));
+      return;
+    }
+
+    setAuthLoading(true);
     const { error } = await supabase.auth.signUp({ email: form.email, password: form.password });
     if (error) {
       setAuthError(error.message);
@@ -549,8 +562,9 @@ function AppShell() {
     setChangePasswordError('');
     setChangePasswordSuccess(false);
 
-    if (changePasswordForm.newPassword.length < 8) {
-      setChangePasswordError(t('settings_passwordTooShort'));
+    const { valid, errors } = validatePassword(changePasswordForm.newPassword, t);
+    if (!valid) {
+      setChangePasswordError(formatPasswordErrors(errors, t));
       return;
     }
 
@@ -1298,6 +1312,7 @@ function AppShell() {
                     onChange={(e) => handleAuthChange('password', e.target.value)}
                     autoComplete="current-password"
                   />
+                  <p className="field-hint">{t('login_passwordHint')}</p>
                   <div className="forgot-password-row">
                     <button type="button" className="link-button" onClick={openForgotPassword}>
                       {t('login_forgotPassword')}
@@ -1394,6 +1409,7 @@ function AppShell() {
                         onChange={(e) => setChangePasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
                         autoComplete="new-password"
                       />
+                      <p className="field-hint">{t('settings_passwordHint')}</p>
                       <label>{t('settings_confirmNewPassword')}</label>
                       <PasswordInput
                         value={changePasswordForm.confirmPassword}

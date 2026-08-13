@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import { usePreferences } from '../context/PreferencesContext';
 import PasswordInput from '../components/shared/PasswordInput';
+import { validatePassword, formatPasswordErrors } from '../lib/passwordValidation';
 
 // Reached via the redirectTo link in the password-reset email. Supabase's
 // client processes the recovery token from the URL fragment on load and
@@ -60,8 +61,13 @@ function ResetPasswordPage() {
     setValidationError('');
     setSubmitError('');
 
-    if (password.length < 8) {
-      setValidationError(t('reset_passwordTooShort'));
+    // Checked on `password` first; `confirmPassword` is validated by the
+    // equality check below rather than re-running the same rule against it
+    // -- once the two match, whatever passed for `password` passed for
+    // `confirmPassword` too.
+    const { valid, errors } = validatePassword(password, t);
+    if (!valid) {
+      setValidationError(formatPasswordErrors(errors, t));
       return;
     }
 
@@ -110,6 +116,7 @@ function ResetPasswordPage() {
               <h2>{t('reset_title')}</h2>
               <label>{t('reset_newPassword')}</label>
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <p className="field-hint">{t('reset_passwordHint')}</p>
               <label>{t('reset_confirmPassword')}</label>
               <PasswordInput
                 value={confirmPassword}

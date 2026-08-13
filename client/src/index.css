@@ -1159,6 +1159,12 @@ button {
   margin-top: 0.2rem;
 }
 
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+
 .team-paused-banner {
   max-width: 1200px;
   margin: 0 auto 1.5rem;
