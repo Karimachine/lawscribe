@@ -1,6 +1,7 @@
 import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
 import { parsePagination } from './_lib/pagination.js';
 import { getOrgAccessContext } from './_lib/org.js';
+import { isActivePaidPlan } from './_lib/plan.js';
 
 // Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
 // catch-all -- Vercel's zero-config "Other" framework detection doesn't
@@ -73,6 +74,34 @@ export default async function handler(req, res) {
       const { name, email, phone, case_type } = req.body || {};
       if (!name) {
         return res.status(400).json({ error: 'Name is required.' });
+      }
+
+      // Free tier gets 0 clients -- "Client management" is a Pro+ feature
+      // (see plans.js), not a quantity that scales with tier, so unlike
+      // the document limit this needs no count query at all: the plan
+      // check alone blocks every create attempt for Free. An active org
+      // shares its owner's unlimited access, same reasoning as the
+      // document limit -- a non-owner member typically has no
+      // subscription row of their own and must not be penalized for that.
+      if (!orgActive) {
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from('subscriptions')
+          .select('plan, status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (subscriptionError) {
+          console.error('Failed to check subscription for client limit:', subscriptionError);
+          return res.status(500).json({ error: 'Unable to save client' });
+        }
+
+        if (!isActivePaidPlan(subscription)) {
+          return res.status(403).json({
+            error: 'free_tier_client_limit',
+            message: 'Client management is a Pro feature. Upgrade to add clients.',
+            upgradeUrl: '/app/billing'
+          });
+        }
       }
 
       const insert = {

@@ -55,6 +55,7 @@ function AppShell() {
   const [resetSuccess, setResetSuccess] = useState(false);
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', case_type: '' });
   const [clientError, setClientError] = useState('');
+  const [clientUpgradeUrl, setClientUpgradeUrl] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
   const [clientSuccess, setClientSuccess] = useState(false);
   const [editingClientId, setEditingClientId] = useState(null);
@@ -903,6 +904,7 @@ function AppShell() {
 
     setClientLoading(true);
     setClientError('');
+    setClientUpgradeUrl('');
     setClientSuccess(false);
 
     try {
@@ -917,6 +919,14 @@ function AppShell() {
 
       const data = await response.json();
       if (!response.ok) {
+        // Free tier's 0-client cap (see clients.js) -- shown as the
+        // server's own message plus an upgrade link, same pattern as the
+        // document save limit above.
+        if (data?.error === 'free_tier_client_limit') {
+          setClientError(data.message || t('clients_saveErrorGeneric'));
+          setClientUpgradeUrl(data.upgradeUrl || '/app/billing');
+          return;
+        }
         throw new Error(data?.error || 'Unable to save client');
       }
 
@@ -1675,7 +1685,17 @@ function AppShell() {
                 <input type="text" value={clientForm.phone} onChange={(e) => handleClientChange('phone', e.target.value)} />
                 <label>{t('clients_caseType')}</label>
                 <input type="text" value={clientForm.case_type} onChange={(e) => handleClientChange('case_type', e.target.value)} />
-                {clientError && <p className="auth-error">{clientError}</p>}
+                {clientError && (
+                  <p className="auth-error">
+                    {clientError}
+                    {clientUpgradeUrl && (
+                      <>
+                        {' '}
+                        <Link to={clientUpgradeUrl}>{t('clients_upgradeLink')}</Link>
+                      </>
+                    )}
+                  </p>
+                )}
                 {clientSuccess && <p className="save-success">{t('clients_updateSuccess')}</p>}
                 <div className="auth-actions">
                   <button className="btn-primary" disabled={clientLoading} onClick={submitClientForm}>
