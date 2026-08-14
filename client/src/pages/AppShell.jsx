@@ -9,6 +9,7 @@ import PasswordInput from '../components/shared/PasswordInput';
 import { plans } from '../lib/plans';
 import { PENDING_CHECKOUT_PLAN_KEY } from '../components/home/PricingSection';
 import { validatePassword, formatPasswordErrors } from '../lib/passwordValidation';
+import DocumentViewModal from '../components/shared/DocumentViewModal';
 
 const LIST_PAGE_LIMIT = 20;
 
@@ -68,6 +69,9 @@ function AppShell() {
   const [docUpdateSuccessId, setDocUpdateSuccessId] = useState(null);
   const [deletingDocId, setDeletingDocId] = useState(null);
   const [docDeleteError, setDocDeleteError] = useState(null);
+  const [viewingDoc, setViewingDoc] = useState(null);
+  const [pdfDownloadingId, setPdfDownloadingId] = useState(null);
+  const [pdfDownloadError, setPdfDownloadError] = useState(null);
   const [apiKeys, setApiKeys] = useState([]);
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyError, setApiKeyError] = useState('');
@@ -346,6 +350,9 @@ function AppShell() {
         setEditingDocId(null);
         setDocDeleteError(null);
         setDocUpdateSuccessId(null);
+        setViewingDoc(null);
+        setPdfDownloadingId(null);
+        setPdfDownloadError(null);
         setSubscription(null);
         setSubscriptionError('');
         setTeamOrg(null);
@@ -547,6 +554,9 @@ function AppShell() {
     setEditingDocId(null);
     setDocDeleteError(null);
     setDocUpdateSuccessId(null);
+    setViewingDoc(null);
+    setPdfDownloadingId(null);
+    setPdfDownloadError(null);
     setSettingsOpen(false);
     setTeamOrg(null);
     setTeamMembers([]);
@@ -882,6 +892,60 @@ function AppShell() {
       setDocDeleteError({ id, message: t('dashboard_docDeleteErrorGeneric') });
     } finally {
       setDeletingDocId(null);
+    }
+  };
+
+  const openViewDoc = (doc) => {
+    setViewingDoc(doc);
+  };
+
+  const closeViewDoc = () => {
+    setViewingDoc(null);
+  };
+
+  // Closes the view modal and hands off to the existing edit-in-place
+  // flow -- the modal itself has no edit capability of its own.
+  const editFromViewDoc = () => {
+    if (viewingDoc) {
+      startEditDoc(viewingDoc);
+    }
+    setViewingDoc(null);
+  };
+
+  const downloadDocumentPdf = async (doc) => {
+    if (!session?.access_token) return;
+
+    setPdfDownloadingId(doc.id);
+    setPdfDownloadError(null);
+
+    try {
+      const response = await fetch(`/api/documents?id=${doc.id}&format=pdf`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+
+      // Server sets Content-Disposition with a sanitized filename, but a
+      // blob download via an <a download> click doesn't read that header
+      // -- the filename below is derived the same way, just client-side.
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(doc.title || 'document').trim().replace(/[^a-z0-9 _-]/gi, '').replace(/\s+/g, '-') || 'document'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF', error);
+      setPdfDownloadError({ id: doc.id, message: t('dashboard_downloadPdfError') });
+    } finally {
+      setPdfDownloadingId(null);
     }
   };
 
@@ -1621,8 +1685,19 @@ function AppShell() {
                             {hasTeam && <div className="creator-note">{creatorLabel(doc.user_id)}</div>}
                             {docUpdateSuccessId === doc.id && <p className="save-success">{t('dashboard_docUpdateSuccess')}</p>}
                             {docDeleteError?.id === doc.id && <p className="auth-error">{docDeleteError.message}</p>}
+                            {pdfDownloadError?.id === doc.id && <p className="auth-error">{pdfDownloadError.message}</p>}
                           </div>
                           <div className="auth-actions">
+                            <button className="btn-secondary" onClick={() => openViewDoc(doc)}>
+                              {t('dashboard_viewDocument')}
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              disabled={pdfDownloadingId === doc.id}
+                              onClick={() => downloadDocumentPdf(doc)}
+                            >
+                              {pdfDownloadingId === doc.id ? t('dashboard_downloadingPdf') : t('dashboard_downloadPdf')}
+                            </button>
                             <button className="btn-secondary" onClick={() => startEditDoc(doc)}>
                               {t('dashboard_editDocument')}
                             </button>
@@ -2044,6 +2119,17 @@ function AppShell() {
           </section>
         )}
       </main>
+
+      {viewingDoc && (
+        <DocumentViewModal
+          doc={viewingDoc}
+          onClose={closeViewDoc}
+          onEdit={editFromViewDoc}
+          onDownloadPdf={() => downloadDocumentPdf(viewingDoc)}
+          pdfLoading={pdfDownloadingId === viewingDoc.id}
+          pdfError={pdfDownloadError?.id === viewingDoc.id ? pdfDownloadError.message : ''}
+        />
+      )}
 
       <footer className="footer">
         <a href="#" className="footer-logo">

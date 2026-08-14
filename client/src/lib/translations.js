@@ -92,6 +92,11 @@ export const translations = {
     dashboard_docUpdateErrorGeneric: 'Unable to update document. Please try again.',
     dashboard_docDeleteErrorGeneric: 'Unable to delete document. Please try again.',
     dashboard_confirmDeleteDocument: 'Are you sure you want to delete this document? This cannot be undone.',
+    dashboard_viewDocument: 'View',
+    dashboard_closeView: 'Close',
+    dashboard_downloadPdf: 'Download PDF',
+    dashboard_downloadingPdf: 'Generating…',
+    dashboard_downloadPdfError: 'Unable to generate PDF. Please try again.',
 
     clients_label: 'Clients',
     clients_title: 'Client directory',
@@ -339,6 +344,11 @@ export const translations = {
     dashboard_docUpdateErrorGeneric: 'No se pudo actualizar el documento. Inténtalo de nuevo.',
     dashboard_docDeleteErrorGeneric: 'No se pudo eliminar el documento. Inténtalo de nuevo.',
     dashboard_confirmDeleteDocument: '¿Estás seguro de que quieres eliminar este documento? Esta acción no se puede deshacer.',
+    dashboard_viewDocument: 'Ver',
+    dashboard_closeView: 'Cerrar',
+    dashboard_downloadPdf: 'Descargar PDF',
+    dashboard_downloadingPdf: 'Generando…',
+    dashboard_downloadPdfError: 'No se pudo generar el PDF. Inténtalo de nuevo.',
 
     clients_label: 'Clientes',
     clients_title: 'Directorio de clientes',

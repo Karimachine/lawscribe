@@ -2,6 +2,7 @@ import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
 import { parsePagination } from './_lib/pagination.js';
 import { isActivePaidPlan } from './_lib/plan.js';
 import { getOrgAccessContext } from './_lib/org.js';
+import { renderDocumentPdf, sanitizeFilename } from './_lib/documentPdf.js';
 
 // Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
 // catch-all -- Vercel's zero-config "Other" framework detection doesn't
@@ -175,6 +176,45 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  if (req.method === 'GET') {
+    // Single-document fetch by id -- didn't exist before this route only
+    // ever served the list (?page=/?limit=) and PUT/PATCH/DELETE by id.
+    // Added specifically to back the PDF download below, but useful on
+    // its own (e.g. a direct link to one document) since the frontend
+    // otherwise always finds a document by scanning its already-loaded
+    // list in memory.
+    //
+    // Org-active: any org member can view/download any org document, not
+    // just its creator -- same access shape as every other branch here.
+    let singleQuery = supabase.from('documents').select('*').eq('id', id);
+    singleQuery = orgActive ? singleQuery.eq('org_id', orgContext.orgId) : singleQuery.eq('user_id', user.id);
+
+    const { data, error } = await singleQuery.maybeSingle();
+
+    if (error) {
+      console.error('Supabase fetch error (single document):', error);
+      return res.status(500).json({ error: 'Unable to fetch document' });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (req.query.format === 'pdf') {
+      try {
+        const pdfBuffer = await renderDocumentPdf(data);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(data.title)}.pdf"`);
+        return res.status(200).send(pdfBuffer);
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError);
+        return res.status(500).json({ error: 'Unable to generate PDF' });
+      }
+    }
+
+    return res.status(200).json(data);
+  }
+
   if (req.method === 'PUT' || req.method === 'PATCH') {
     const { title, prompt, content } = req.body || {};
     if (!prompt || !content) {
@@ -224,6 +264,6 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  res.setHeader('Allow', 'PUT, PATCH, DELETE');
+  res.setHeader('Allow', 'GET, PUT, PATCH, DELETE');
   return res.status(405).json({ error: 'Method not allowed' });
 }
