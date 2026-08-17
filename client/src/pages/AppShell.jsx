@@ -2032,6 +2032,19 @@ function AppShell() {
                         {portalLoading ? t('billing_openingPortal') : t('billing_manageButton')}
                       </button>
                     </div>
+                    <p>
+                      {/* Plain <a>, not a react-router Link -- matches the
+                          existing Free-tier "View plans" pattern (same
+                          element type just above), since #pricing lives on
+                          the marketing homepage outside AppShell's routes
+                          and needs a real navigation + anchor scroll, not a
+                          client-side route change. PricingSection's own
+                          handleManageOrSwitch() is already current-plan-
+                          aware and routes a tier switch through the Stripe
+                          portal -- reused as-is rather than duplicating a
+                          second plan-picker UI here. */}
+                      <a href="/#pricing">{t('billing_changePlanLink')}</a>
+                    </p>
                   </>
                 )}
                 {isTeamOwner && (

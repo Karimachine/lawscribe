@@ -214,6 +214,7 @@ export const translations = {
     billing_manageButton: 'Manage subscription',
     billing_openingPortal: 'Opening…',
     billing_portalErrorGeneric: 'Unable to open the billing portal. Please try again.',
+    billing_changePlanLink: 'Change plan →',
     billing_manageTeamLink: 'Manage your team →',
 
     billingSuccess_title: 'Subscription successful',
@@ -466,6 +467,7 @@ export const translations = {
     billing_manageButton: 'Administrar suscripción',
     billing_openingPortal: 'Abriendo…',
     billing_portalErrorGeneric: 'No se pudo abrir el portal de facturación. Inténtalo de nuevo.',
+    billing_changePlanLink: 'Cambiar de plan →',
     billing_manageTeamLink: 'Gestiona tu equipo →',
 
     billingSuccess_title: 'Suscripción exitosa',
