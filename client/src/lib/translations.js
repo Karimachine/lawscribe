@@ -253,7 +253,12 @@ export const translations = {
     team_pausedBannerLink: 'Manage billing',
     team_pausedBannerMemberPrefix: 'Shared team access is currently paused.',
     team_pausedBannerMemberSuffix: 'needs an active Firm subscription to restore it.',
-    team_unknownOwner: 'The team owner'
+    team_unknownOwner: 'The team owner',
+
+    session_expiredMessage: 'Your session has expired.',
+    session_expiredAction: 'Log in again',
+    session_restoredSaveNotice: 'Welcome back — we restored the document you were working on. Review it below and save again.',
+    session_restoredEditNotice: 'Welcome back — we restored your unsaved edit. Review it below and save again.'
   },
   es: {
     common_cancel: 'Cancelar',
@@ -506,7 +511,12 @@ export const translations = {
     team_pausedBannerLink: 'Gestionar facturación',
     team_pausedBannerMemberPrefix: 'El acceso compartido del equipo está pausado actualmente.',
     team_pausedBannerMemberSuffix: 'necesita una suscripción Firm activa para restaurarlo.',
-    team_unknownOwner: 'El propietario del equipo'
+    team_unknownOwner: 'El propietario del equipo',
+
+    session_expiredMessage: 'Tu sesión ha expirado.',
+    session_expiredAction: 'Inicia sesión de nuevo',
+    session_restoredSaveNotice: 'Bienvenido de nuevo — restauramos el documento en el que estabas trabajando. Revísalo abajo y guárdalo de nuevo.',
+    session_restoredEditNotice: 'Bienvenido de nuevo — restauramos tu edición sin guardar. Revísala abajo y guárdala de nuevo.'
   }
 };
 

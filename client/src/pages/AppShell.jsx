@@ -10,6 +10,7 @@ import { plans } from '../lib/plans';
 import { PENDING_CHECKOUT_PLAN_KEY } from '../components/home/PricingSection';
 import { validatePassword, formatPasswordErrors } from '../lib/passwordValidation';
 import DocumentViewModal from '../components/shared/DocumentViewModal';
+import { stashPendingSave, readPendingSave, clearPendingSave, stashPendingEdit, readPendingEdit, clearPendingEdit } from '../lib/pendingWork';
 
 const LIST_PAGE_LIMIT = 20;
 
@@ -72,6 +73,9 @@ function AppShell() {
   const [viewingDoc, setViewingDoc] = useState(null);
   const [pdfDownloadingId, setPdfDownloadingId] = useState(null);
   const [pdfDownloadError, setPdfDownloadError] = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [restoredNotice, setRestoredNotice] = useState('');
+  const restoredNoticeTimeoutRef = useRef(null);
   const [apiKeys, setApiKeys] = useState([]);
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyError, setApiKeyError] = useState('');
@@ -288,6 +292,69 @@ function AppShell() {
     }
   };
 
+  // Detects a stale/expired-session 401 on a write request. Auto-refresh
+  // is enabled by default in supabase-js, but its refresh timer is a
+  // plain setInterval, which browsers throttle or pause in backgrounded
+  // tabs -- a documented supabase-js limitation (its own source has a
+  // comment acknowledging this exact case), not a misconfiguration here.
+  // When a long-backgrounded tab regains focus, there's a real window
+  // where a write can race ahead of the pending refresh and hit the
+  // server with an already-expired token. Returns true if this response
+  // was a session-expiry 401 (the caller should stop -- this already
+  // handled it); false otherwise, so the caller's existing error
+  // handling runs as normal.
+  const handlePotentialSessionExpiry = (response) => {
+    if (response.status === 401) {
+      setSessionExpired(true);
+      return true;
+    }
+    return false;
+  };
+
+  // The session is already unusable by the time this fires -- signing out
+  // clears any dead local session state before sending the user to log
+  // back in, rather than leaving a half-dead session for /login to trip
+  // over.
+  const reauthenticate = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
+
+  // Runs once per successful session establish (see fetchSession below).
+  // A no-op in the common case -- readPendingSave/readPendingEdit return
+  // null unless a session-expiry 401 actually stashed something. Restores
+  // into form state rather than auto-resubmitting, so nothing gets
+  // written on the user's behalf without their own explicit save.
+  const restorePendingWork = () => {
+    const showRestoredNotice = (message) => {
+      setRestoredNotice(message);
+      if (restoredNoticeTimeoutRef.current) {
+        clearTimeout(restoredNoticeTimeoutRef.current);
+      }
+      restoredNoticeTimeoutRef.current = setTimeout(() => setRestoredNotice(''), 6000);
+    };
+
+    const pendingSave = readPendingSave();
+    if (pendingSave) {
+      const matchingType = docTypes.find((docType) => docType.title === pendingSave.title);
+      if (matchingType) setActiveDoc(matchingType);
+      setPromptText(pendingSave.prompt || '');
+      setGeneratedText(pendingSave.content || '');
+      clearPendingSave();
+      showRestoredNotice(t('session_restoredSaveNotice'));
+      return;
+    }
+
+    const pendingEdit = readPendingEdit();
+    if (pendingEdit) {
+      setEditingDocId(pendingEdit.id);
+      setEditDocTitle(pendingEdit.title || '');
+      setEditDocContent(pendingEdit.content || '');
+      clearPendingEdit();
+      showRestoredNotice(t('session_restoredEditNotice'));
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -309,6 +376,7 @@ function AppShell() {
             // wherever the owner happens to be in the app.
             loadSubscription()
           ]);
+          restorePendingWork();
         }
       } catch (error) {
         console.warn('Auth session error:', error);
@@ -430,6 +498,9 @@ function AppShell() {
       }
       if (docUpdateSuccessTimeoutRef.current) {
         clearTimeout(docUpdateSuccessTimeoutRef.current);
+      }
+      if (restoredNoticeTimeoutRef.current) {
+        clearTimeout(restoredNoticeTimeoutRef.current);
       }
     },
     []
@@ -650,6 +721,10 @@ function AppShell() {
         }
       });
 
+      if (handlePotentialSessionExpiry(response)) {
+        setDeleteAccountLoading(false);
+        return;
+      }
       if (!response.ok) {
         throw new Error('Failed to delete account');
       }
@@ -710,6 +785,10 @@ function AppShell() {
         }
       });
 
+      if (handlePotentialSessionExpiry(response)) {
+        setPortalLoading(false);
+        return;
+      }
       if (!response.ok) {
         throw new Error('Failed to create portal session');
       }
@@ -777,6 +856,10 @@ function AppShell() {
 
       const saveData = await saveResponse.json().catch(() => ({}));
       if (!saveResponse.ok) {
+        if (handlePotentialSessionExpiry(saveResponse)) {
+          stashPendingSave({ title: activeDoc.title, prompt: promptText, content: generatedText });
+          return;
+        }
         // Free tier's monthly document cap (see documents.js) -- shown as
         // the server's own message plus an upgrade link, not folded into
         // the generic error path below.
@@ -840,6 +923,10 @@ function AppShell() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (handlePotentialSessionExpiry(response)) {
+          stashPendingEdit({ id, title: editDocTitle, content: editDocContent });
+          return;
+        }
         throw new Error(data?.error || 'Failed to update document');
       }
 
@@ -878,6 +965,7 @@ function AppShell() {
         }
       });
 
+      if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
         throw new Error('Failed to delete document');
       }
@@ -997,6 +1085,7 @@ function AppShell() {
 
       const data = await response.json();
       if (!response.ok) {
+        if (handlePotentialSessionExpiry(response)) return;
         // Free tier's 0-client cap (see clients.js) -- shown as the
         // server's own message plus an upgrade link, same pattern as the
         // document save limit above.
@@ -1051,6 +1140,7 @@ function AppShell() {
           Authorization: `Bearer ${session.access_token}`
         }
       });
+      if (handlePotentialSessionExpiry(response)) return;
       if (response.ok) {
         if (editingClientId === id) {
           cancelEditClient();
@@ -1089,6 +1179,7 @@ function AppShell() {
 
       const data = await response.json();
       if (!response.ok) {
+        if (handlePotentialSessionExpiry(response)) return;
         throw new Error(data?.error || 'Unable to create API key');
       }
 
@@ -1127,6 +1218,7 @@ function AppShell() {
         }
       });
 
+      if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
         throw new Error('Failed to revoke API key');
       }
@@ -1181,6 +1273,7 @@ function AppShell() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (handlePotentialSessionExpiry(response)) return;
         // Map the two known error cases to clear messages; anything else
         // falls back to a generic message rather than showing raw
         // server error text.
@@ -1227,6 +1320,7 @@ function AppShell() {
         body: JSON.stringify({ user_id: memberUserId })
       });
 
+      if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
         throw new Error('Failed to remove team member');
       }
@@ -1360,6 +1454,15 @@ function AppShell() {
           )}
         </div>
       </nav>
+
+      {sessionExpired && !isLoginPage && (
+        <div className="session-expired-banner">
+          {t('session_expiredMessage')}{' '}
+          <button type="button" className="link-button" onClick={reauthenticate}>
+            {t('session_expiredAction')}
+          </button>
+        </div>
+      )}
 
       <main>
         {isLoginPage && (
@@ -1554,6 +1657,8 @@ function AppShell() {
                 )}
               </div>
             </div>
+
+            {restoredNotice && <p className="save-success dashboard-restored-notice">{restoredNotice}</p>}
 
             {showPausedBanner && (
               <div className="team-paused-banner">

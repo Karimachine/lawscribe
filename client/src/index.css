@@ -1375,3 +1375,25 @@ button {
 .doc-heading-3 {
   font-size: 1rem;
 }
+
+/* Session-expiry banner (global, spans full width under the nav) */
+.session-expired-banner {
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  text-align: center;
+  background: rgba(164, 35, 35, 0.08);
+  border-bottom: 1px solid rgba(164, 35, 35, 0.25);
+  color: #a42323;
+  font-size: 0.95rem;
+}
+
+.session-expired-banner .link-button {
+  color: #a42323;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.dashboard-restored-notice {
+  max-width: 1200px;
+  margin: 0 auto 1.5rem;
+}
