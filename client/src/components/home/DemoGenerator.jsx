@@ -46,6 +46,19 @@ function DemoGenerator() {
       setShowSignupPrompt(true);
     } catch (err) {
       console.error('Demo generation failed', err);
+      // The server enforces the same per-IP cap independently of the
+      // client-side check above (see rateLimit.js) -- this catches the
+      // case where that server-side limit trips even though the
+      // localStorage-based check here didn't (e.g. multiple visitors
+      // behind the same IP), so the message stays consistent either way.
+      if (err.status === 429) {
+        setError(
+          err.serverMessage ||
+            "You've reached the demo limit for this hour. Try again later, or sign up for unlimited access."
+        );
+        setShowSignupPrompt(true);
+        return;
+      }
       setError('There was a problem generating the demo document. Please try again.');
     } finally {
       setLoading(false);

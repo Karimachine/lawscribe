@@ -818,10 +818,23 @@ function AppShell() {
     setSaveSuccess(false);
 
     try {
-      const content = await generateDocument({ prompt: promptText, documentType: activeDoc.title });
+      const content = await generateDocument({
+        prompt: promptText,
+        documentType: activeDoc.title,
+        accessToken: session.access_token
+      });
       setGeneratedText(content || 'Document generated successfully.');
     } catch (error) {
       console.error('Failed to generate document', error);
+      if (error.status === 401) {
+        setSessionExpired(true);
+        setGeneratedText('');
+        return;
+      }
+      if (error.status === 429) {
+        setGeneratedText(error.serverMessage || t('dashboard_generateRateLimited'));
+        return;
+      }
       setGeneratedText('There was a problem generating the document.');
     } finally {
       setLoading(false);
