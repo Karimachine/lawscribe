@@ -21,12 +21,19 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  // Guard against the FK violation this used to hit: organizations.owner_user_id
-  // references auth.users(id) with no ON DELETE clause, so the deleteUser()
-  // call at the end used to fail with a constraint violation -- after
-  // subscriptions/documents/clients/keys were already gone -- whenever this
-  // user still owned an org. Checked first, before anything is touched, so
-  // a blocked deletion never leaves partial state.
+  // Guard against the FK violations this used to hit -- checked first,
+  // before anything is touched, so a blocked deletion never leaves
+  // partial state. Two separate chains end at this user/org:
+  //   organizations.owner_user_id -> auth.users            (no ON DELETE)
+  //   clients.org_id / documents.org_id -> organizations.id (no ON DELETE)
+  // Both lack an ON DELETE clause (005_add_organizations.sql), so the
+  // *order* deletions happen in matters. The org row itself is not
+  // deleted here -- only after documents/clients are gone, further down
+  // -- confirmed live: deleting organizations while a client/document
+  // still references it via org_id fails with "violates foreign key
+  // constraint ... on table clients", which is exactly what happened to
+  // a sole owner who actually had org-linked content (the original fix's
+  // test used synthetic accounts with none, so it never hit this).
   const { data: ownedOrg, error: ownedOrgError } = await supabase
     .from('organizations')
     .select('id')
@@ -55,17 +62,6 @@ export default async function handler(req, res) {
         error: 'org_has_members',
         message: 'Remove all other team members before deleting your account.'
       });
-    }
-
-    // Sole member of their own org (just the owner) -- safe to delete the
-    // org outright. This cascades to remove the lone organization_members
-    // row too (org_id references organizations(id) on delete cascade, see
-    // 005_add_organizations.sql), so deleteUser() below no longer hits the
-    // FK violation on organizations.owner_user_id.
-    const { error: deleteOrgError } = await supabase.from('organizations').delete().eq('id', ownedOrg.id);
-    if (deleteOrgError) {
-      console.error('Failed to delete organization during account deletion:', deleteOrgError);
-      return res.status(500).json({ error: 'Unable to delete account' });
     }
   }
 
@@ -105,6 +101,47 @@ export default async function handler(req, res) {
   if (clientsError) {
     console.error('Failed to delete clients during account deletion:', clientsError);
     return res.status(500).json({ error: 'Unable to delete account' });
+  }
+
+  // Sole owner (checked above; blocked already if other members exist) --
+  // now safe to delete the org itself: this user's own documents/clients
+  // that referenced it via org_id are gone (just above), which is what
+  // the FK actually requires. But a *former* member (removed via
+  // /api/team, not a current member) could still have their own
+  // documents/clients pointing at this org_id -- their content was never
+  // touched by that removal, only their organization_members row was.
+  // Clearing (not deleting) any such leftover references detaches that
+  // still-existing user's data from the org being deleted, rather than
+  // destroying it as a side effect of someone else's account deletion --
+  // same grandfathering principle as everywhere else in this app.
+  if (ownedOrg) {
+    const { error: clearDocOrgError } = await supabase
+      .from('documents')
+      .update({ org_id: null })
+      .eq('org_id', ownedOrg.id);
+    if (clearDocOrgError) {
+      console.error('Failed to clear org_id on remaining documents during account deletion:', clearDocOrgError);
+      return res.status(500).json({ error: 'Unable to delete account' });
+    }
+
+    const { error: clearClientOrgError } = await supabase
+      .from('clients')
+      .update({ org_id: null })
+      .eq('org_id', ownedOrg.id);
+    if (clearClientOrgError) {
+      console.error('Failed to clear org_id on remaining clients during account deletion:', clearClientOrgError);
+      return res.status(500).json({ error: 'Unable to delete account' });
+    }
+
+    // Cascades to remove the lone organization_members row too (org_id
+    // references organizations(id) on delete cascade, see
+    // 005_add_organizations.sql), so deleteUser() below no longer hits
+    // the FK violation on organizations.owner_user_id either.
+    const { error: deleteOrgError } = await supabase.from('organizations').delete().eq('id', ownedOrg.id);
+    if (deleteOrgError) {
+      console.error('Failed to delete organization during account deletion:', deleteOrgError);
+      return res.status(500).json({ error: 'Unable to delete account' });
+    }
   }
 
   const { error: keysError } = await supabase.from('api_keys').delete().eq('user_id', user.id);
