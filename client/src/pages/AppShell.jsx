@@ -61,6 +61,7 @@ function AppShell() {
   const [clientUpgradeUrl, setClientUpgradeUrl] = useState('');
   const [clientLoading, setClientLoading] = useState(false);
   const [clientSuccess, setClientSuccess] = useState(false);
+  const [clientDeleteError, setClientDeleteError] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingDocId, setEditingDocId] = useState(null);
   const [editDocTitle, setEditDocTitle] = useState('');
@@ -676,7 +677,11 @@ function AppShell() {
       changePasswordSuccessTimeoutRef.current = setTimeout(() => setChangePasswordSuccess(false), 3000);
     } catch (error) {
       console.error('Failed to change password', error);
-      setChangePasswordError(t('settings_changePasswordErrorGeneric'));
+      // error here is always a real Supabase Auth error (thrown from
+      // updateError above, the only throw in this try block) -- its
+      // .message is already user-presentable, same pattern already used
+      // correctly in signIn() and ResetPasswordPage.jsx.
+      setChangePasswordError(error?.message || t('settings_changePasswordErrorGeneric'));
     } finally {
       setChangePasswordLoading(false);
     }
@@ -700,7 +705,9 @@ function AppShell() {
       setChangeEmailSuccess(true);
     } catch (error) {
       console.error('Failed to change email', error);
-      setChangeEmailError(t('settings_changeEmailErrorGeneric'));
+      // Same reasoning as changePassword above -- error is a real Supabase
+      // Auth error (e.g. "email already in use"), not a generic exception.
+      setChangeEmailError(error?.message || t('settings_changeEmailErrorGeneric'));
     } finally {
       setChangeEmailLoading(false);
     }
@@ -726,7 +733,16 @@ function AppShell() {
         return;
       }
       if (!response.ok) {
-        throw new Error('Failed to delete account');
+        // Prefer the server's own message (e.g. org_has_members' "Remove
+        // all other team members before deleting your account.") over the
+        // generic fallback -- set directly here rather than thrown+caught
+        // below, so a genuinely unexpected exception (network failure,
+        // etc.) is the only thing that ever falls through to the catch
+        // block's generic message.
+        const data = await response.json().catch(() => ({}));
+        setDeleteAccountError(data?.message || data?.error || t('settings_deleteAccountErrorGeneric'));
+        setDeleteAccountLoading(false);
+        return;
       }
 
       await supabase.auth.signOut();
@@ -789,11 +805,13 @@ function AppShell() {
         setPortalLoading(false);
         return;
       }
-      if (!response.ok) {
-        throw new Error('Failed to create portal session');
-      }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setPortalError(data?.message || data?.error || t('billing_portalErrorGeneric'));
+        setPortalLoading(false);
+        return;
+      }
       if (!data.url) {
         throw new Error('No portal URL returned');
       }
@@ -881,7 +899,8 @@ function AppShell() {
           setSaveUpgradeUrl(saveData.upgradeUrl || '/app/billing');
           return;
         }
-        throw new Error(saveData?.error || 'Failed to save document');
+        setSaveError(saveData?.message || saveData?.error || t('dashboard_saveErrorGeneric'));
+        return;
       }
 
       setSaveSuccess(true);
@@ -940,7 +959,8 @@ function AppShell() {
           stashPendingEdit({ id, title: editDocTitle, content: editDocContent });
           return;
         }
-        throw new Error(data?.error || 'Failed to update document');
+        setDocUpdateError(data?.message || data?.error || t('dashboard_docUpdateErrorGeneric'));
+        return;
       }
 
       setSavedDocs((prev) => prev.map((doc) => (doc.id === id ? data : doc)));
@@ -980,7 +1000,9 @@ function AppShell() {
 
       if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
-        throw new Error('Failed to delete document');
+        const data = await response.json().catch(() => ({}));
+        setDocDeleteError({ id, message: data?.message || data?.error || t('dashboard_docDeleteErrorGeneric') });
+        return;
       }
 
       if (editingDocId === id) {
@@ -1107,7 +1129,8 @@ function AppShell() {
           setClientUpgradeUrl(data.upgradeUrl || '/app/billing');
           return;
         }
-        throw new Error(data?.error || 'Unable to save client');
+        setClientError(data?.message || data?.error || t('clients_saveErrorGeneric'));
+        return;
       }
 
       if (isEditing) {
@@ -1146,6 +1169,8 @@ function AppShell() {
       return;
     }
 
+    setClientDeleteError(null);
+
     try {
       const response = await fetch(`/api/clients?id=${id}`, {
         method: 'DELETE',
@@ -1154,15 +1179,23 @@ function AppShell() {
         }
       });
       if (handlePotentialSessionExpiry(response)) return;
-      if (response.ok) {
-        if (editingClientId === id) {
-          cancelEditClient();
-        }
-        await loadClients(session.access_token, 1);
-        await loadStats(session.access_token);
+      if (!response.ok) {
+        // Previously silent -- a failed delete showed nothing at all, not
+        // even a generic message, so there was no fallback to fix here;
+        // this adds the missing error state itself, same shape as
+        // docDeleteError above.
+        const data = await response.json().catch(() => ({}));
+        setClientDeleteError({ id, message: data?.message || data?.error || t('clients_deleteErrorGeneric') });
+        return;
       }
+      if (editingClientId === id) {
+        cancelEditClient();
+      }
+      await loadClients(session.access_token, 1);
+      await loadStats(session.access_token);
     } catch (error) {
       console.error('Failed to delete client', error);
+      setClientDeleteError({ id, message: t('clients_deleteErrorGeneric') });
     }
   };
 
@@ -1193,7 +1226,8 @@ function AppShell() {
       const data = await response.json();
       if (!response.ok) {
         if (handlePotentialSessionExpiry(response)) return;
-        throw new Error(data?.error || 'Unable to create API key');
+        setApiKeyError(data?.message || data?.error || t('keys_createErrorGeneric'));
+        return;
       }
 
       setJustCreatedKey(data.key);
@@ -1201,7 +1235,7 @@ function AppShell() {
       await loadApiKeys(session.access_token);
     } catch (error) {
       console.error('Failed to create API key', error);
-      setApiKeyError('Unable to create API key. Please try again.');
+      setApiKeyError(t('keys_createErrorGeneric'));
     } finally {
       setApiKeyLoading(false);
     }
@@ -1233,7 +1267,9 @@ function AppShell() {
 
       if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
-        throw new Error('Failed to revoke API key');
+        const data = await response.json().catch(() => ({}));
+        setRevokeError({ id, message: data?.message || data?.error || t('keys_revokeErrorGeneric') });
+        return;
       }
 
       if (justCreatedKey?.id === id) {
@@ -1335,7 +1371,9 @@ function AppShell() {
 
       if (handlePotentialSessionExpiry(response)) return;
       if (!response.ok) {
-        throw new Error('Failed to remove team member');
+        const data = await response.json().catch(() => ({}));
+        setTeamRemoveError({ id: memberUserId, message: data?.message || data?.error || t('team_removeErrorGeneric') });
+        return;
       }
 
       await loadTeam(session.access_token);
@@ -1942,6 +1980,7 @@ function AppShell() {
                           <div>{client.email}</div>
                           <div>{client.phone}</div>
                           {hasTeam && <div className="creator-note">{creatorLabel(client.user_id)}</div>}
+                          {clientDeleteError?.id === client.id && <p className="auth-error">{clientDeleteError.message}</p>}
                         </div>
                         <div className="auth-actions">
                           <button className="btn-secondary" onClick={() => startEditClient(client)}>

@@ -81,11 +81,12 @@ function PricingSection() {
         }
       });
 
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error('Failed to open billing portal');
+        setCheckoutError(result?.message || result?.error || 'Unable to open the billing portal. Please try again.');
+        setLoadingPlanId(null);
+        return;
       }
-
-      const result = await response.json();
       if (!result.url) {
         throw new Error('No portal URL returned');
       }

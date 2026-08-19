@@ -120,6 +120,7 @@ export const translations = {
     clients_loadErrorGeneric: "Couldn't load your clients right now. Try refreshing the page.",
     clients_delete: 'Delete',
     clients_confirmDelete: 'Are you sure you want to delete this client? This cannot be undone.',
+    clients_deleteErrorGeneric: 'Unable to delete client. Please try again.',
 
     keys_label: 'API Keys',
     keys_title: 'API keys',
@@ -148,6 +149,7 @@ export const translations = {
       "You haven't confirmed you've copied your new API key. If you leave now, you won't be able to see it again. Leave anyway?",
     keys_confirmRevoke: 'Are you sure you want to revoke this API key? This cannot be undone.',
     keys_revokeErrorGeneric: 'Unable to revoke this key. Please try again.',
+    keys_createErrorGeneric: 'Unable to create API key. Please try again.',
     keys_revokeSuccess: 'Key revoked.',
 
     settings_title: 'Settings',
@@ -379,6 +381,7 @@ export const translations = {
     clients_loadErrorGeneric: 'No se pudieron cargar tus clientes. Intenta recargar la página.',
     clients_delete: 'Eliminar',
     clients_confirmDelete: '¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.',
+    clients_deleteErrorGeneric: 'No se pudo eliminar el cliente. Inténtalo de nuevo.',
 
     keys_label: 'Claves API',
     keys_title: 'Claves API',
@@ -407,6 +410,7 @@ export const translations = {
       'No has confirmado que copiaste tu nueva clave API. Si sales ahora, no podrás volver a verla. ¿Salir de todos modos?',
     keys_confirmRevoke: '¿Estás seguro de que quieres revocar esta clave API? Esta acción no se puede deshacer.',
     keys_revokeErrorGeneric: 'No se pudo revocar esta clave. Inténtalo de nuevo.',
+    keys_createErrorGeneric: 'No se pudo crear la clave API. Inténtalo de nuevo.',
     keys_revokeSuccess: 'Clave revocada.',
 
     settings_title: 'Ajustes',
