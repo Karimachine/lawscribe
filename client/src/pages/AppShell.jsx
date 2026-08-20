@@ -10,6 +10,7 @@ import { plans } from '../lib/plans';
 import { PENDING_CHECKOUT_PLAN_KEY } from '../components/home/PricingSection';
 import { validatePassword, formatPasswordErrors } from '../lib/passwordValidation';
 import DocumentViewModal from '../components/shared/DocumentViewModal';
+import Footer from '../components/shared/Footer';
 import { stashPendingSave, readPendingSave, clearPendingSave, stashPendingEdit, readPendingEdit, clearPendingEdit } from '../lib/pendingWork';
 
 const LIST_PAGE_LIMIT = 20;
@@ -2301,18 +2302,7 @@ function AppShell() {
         />
       )}
 
-      <footer className="footer">
-        <a href="#" className="footer-logo">
-          Law<span>Scribe</span>
-        </a>
-        <div className="footer-links">
-          <Link to="/privacy">{t('footer_privacy')}</Link>
-          <Link to="/terms">{t('footer_terms')}</Link>
-          <a href="#">Help</a>
-          <a href="#">Contact</a>
-        </div>
-        <div className="footer-copy">© 2026 LawScribe. Not a law firm.</div>
-      </footer>
+      <Footer />
     </div>
   );
 }

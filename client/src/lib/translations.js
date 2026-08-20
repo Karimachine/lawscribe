@@ -200,9 +200,6 @@ export const translations = {
     notFound_backHome: 'Back to home',
     notFound_goToDashboard: 'Go to dashboard',
 
-    footer_privacy: 'Privacy',
-    footer_terms: 'Terms',
-
     billing_label: 'Billing',
     billing_title: 'Billing',
     billing_subtitle: 'Manage your LawScribe subscription.',
@@ -460,9 +457,6 @@ export const translations = {
     notFound_body: 'La página que buscas no existe o fue movida.',
     notFound_backHome: 'Volver al inicio',
     notFound_goToDashboard: 'Ir al panel',
-
-    footer_privacy: 'Privacidad',
-    footer_terms: 'Términos',
 
     billing_label: 'Facturación',
     billing_title: 'Facturación',
