@@ -1,8 +1,9 @@
-import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { getSupabaseAdmin } from './_lib/supabaseAdmin.js';
 import { parsePagination } from './_lib/pagination.js';
 import { isActivePaidPlan } from './_lib/plan.js';
 import { getOrgAccessContext } from './_lib/org.js';
 import { renderDocumentPdf, sanitizeFilename } from './_lib/documentPdf.js';
+import { resolveRequestIdentity } from '../lib/apiKeyAuth.js';
 
 // Flat file + query-string dispatch (?id=...), not a [[...id]].js optional
 // catch-all -- Vercel's zero-config "Other" framework detection doesn't
@@ -48,9 +49,25 @@ export default async function handler(req, res) {
 
   const supabase = getSupabaseAdmin();
 
-  const user = await getUserFromToken(supabase, req.headers.authorization);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Accepts either a Supabase session JWT or a LawScribe API key
+  // (Authorization: Bearer lsk_live_..., see client/lib/apiKeyAuth.js) --
+  // unlike /api/generate, an anonymous request is never valid here.
+  const auth = await resolveRequestIdentity(supabase, req);
+  if (!auth.user) {
+    return res.status(401).json({ error: auth.error || 'Unauthorized' });
+  }
+  const user = auth.user;
+
+  // API keys are scoped to read-only document access -- they can list
+  // and fetch, matching what a "generate + retrieve programmatically"
+  // workflow needs, but creating, editing, or deleting a document still
+  // requires a real session. Checked before the org lookup below so a
+  // request that's about to be rejected doesn't pay for one first.
+  if (auth.authType === 'apiKey' && req.method !== 'GET') {
+    return res.status(403).json({
+      error: 'api_key_read_only',
+      message: 'API keys can only read documents. Use the LawScribe app to create, edit, or delete documents.'
+    });
   }
 
   // Resolved once per request, reused across every branch below. null for

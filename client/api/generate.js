@@ -1,13 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getSupabaseAdmin, getUserFromToken } from './_lib/supabaseAdmin.js';
+import { getSupabaseAdmin } from './_lib/supabaseAdmin.js';
 import { checkAndIncrementRateLimit, getClientIp } from './_lib/rateLimit.js';
+import { resolveRequestIdentity } from '../lib/apiKeyAuth.js';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-// Authenticated: identified per-user, generous limit for real iterative
-// drafting.
+// Authenticated (session OR API key): identified per-caller, generous
+// limit for real iterative drafting or programmatic use. Same number for
+// both -- an API key stands in for a real account here, not a lesser
+// tier of it -- see the identity string below for why they still get
+// separate buckets from each other.
 const AUTHENTICATED_RATE_LIMIT = 20;
 // Anonymous (the public homepage demo, see DemoGenerator.jsx): per-IP,
 // matching client/src/lib/demoRateLimit.js's existing client-side cap
@@ -42,24 +46,25 @@ export default async function handler(req, res) {
 
   const supabase = getSupabaseAdmin();
 
-  // Auth is optional here on purpose -- this route serves both the
-  // authenticated dashboard generator AND the public, logged-out homepage
-  // demo (DemoGenerator.jsx via generateDocument.js). No Authorization
-  // header at all is a legitimate anonymous demo request, not an error.
-  // A header that IS present but fails to resolve to a real user
-  // (expired/invalid token) is different -- that's a signed-in user's
-  // session going stale mid-use, not a demo visitor -- so it gets a
-  // proper 401 the frontend reacts to the same way as every other
-  // authenticated write in this app (see handlePotentialSessionExpiry in
-  // AppShell.jsx), rather than silently downgrading them to the
-  // anonymous tier's much lower rate limit with no explanation.
-  let user = null;
-  if (req.headers.authorization) {
-    user = await getUserFromToken(supabase, req.headers.authorization);
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  // Auth is optional here on purpose -- this route serves the
+  // authenticated dashboard generator, programmatic callers using a
+  // LawScribe API key (Authorization: Bearer lsk_live_..., see
+  // client/lib/apiKeyAuth.js), AND the public, logged-out homepage demo
+  // (DemoGenerator.jsx via generateDocument.js). No Authorization header
+  // at all is a legitimate anonymous demo request, not an error. A
+  // credential that IS present but fails to resolve -- an expired/invalid
+  // session token, or an invalid/revoked API key -- is different in both
+  // cases: that's a caller who believes they're authenticated going
+  // stale/broken mid-use, not a demo visitor -- so it gets a proper 401
+  // (the frontend reacts to the session case the same way as every other
+  // authenticated write in this app, see handlePotentialSessionExpiry in
+  // AppShell.jsx) rather than silently downgrading them to the anonymous
+  // tier's much lower rate limit with no explanation.
+  const auth = await resolveRequestIdentity(supabase, req);
+  if (auth.authType !== 'anonymous' && !auth.user) {
+    return res.status(401).json({ error: auth.error || 'Unauthorized' });
   }
+  const user = auth.user;
 
   // Org/plan status is deliberately NOT checked here. Unlike
   // documents.js/clients.js, this route never reads or writes a row that
@@ -70,7 +75,18 @@ export default async function handler(req, res) {
   // concept (org-shared access) that doesn't apply to this endpoint.
   // What generation actually needed was traceability + abuse throttling,
   // which the auth + rate limit above now provide.
-  const identity = user ? `user:${user.id}` : `ip:${getClientIp(req)}`;
+  //
+  // Note for whoever builds the planned Free vs Pro document-type
+  // restriction: `user` above is resolved identically whether the caller
+  // used a session or an API key (see resolveRequestIdentity), so a
+  // documentType/plan check added here will automatically cover both --
+  // no separate API-key case to remember.
+  //
+  // API keys get their own identity prefix (not `user:<id>`) so a caller
+  // using both the app and a key don't share/starve one bucket, even
+  // though the two currently carry the same numeric limit.
+  const identity =
+    auth.authType === 'apiKey' ? `apiKey:${user.id}` : user ? `user:${user.id}` : `ip:${getClientIp(req)}`;
   const maxRequests = user ? AUTHENTICATED_RATE_LIMIT : ANONYMOUS_RATE_LIMIT;
 
   const { limited } = await checkAndIncrementRateLimit(supabase, identity, maxRequests);
