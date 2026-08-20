@@ -217,6 +217,28 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Document not found' });
     }
 
+    // Minimal v1 of document version history: no restore UI yet (see
+    // TODO.md), just enough to confirm capture is working and to give a
+    // future UI something to build on. Timestamps + who edited only --
+    // never the snapshot content itself, so this stays cheap regardless
+    // of how much history a document accumulates. Access is governed by
+    // the same document-level check just above (org-aware `data` fetch)
+    // -- if you can view the document, you can view its version list.
+    if (req.query.versions === 'true') {
+      const { data: versions, error: versionsError } = await supabase
+        .from('document_versions')
+        .select('id, created_at, edited_by')
+        .eq('document_id', id)
+        .order('created_at', { ascending: false });
+
+      if (versionsError) {
+        console.error('Failed to fetch document versions:', versionsError);
+        return res.status(500).json({ error: 'Unable to fetch document versions' });
+      }
+
+      return res.status(200).json({ versions });
+    }
+
     if (req.query.format === 'pdf') {
       try {
         const pdfBuffer = await renderDocumentPdf(data);
@@ -237,13 +259,62 @@ export default async function handler(req, res) {
     if (!prompt || !content) {
       return res.status(400).json({ error: 'Prompt and content are required.' });
     }
+    const newTitle = title || 'Generated Document';
+
+    // Read the current (about-to-be-overwritten) state first -- same
+    // org-aware scoping as the update below, so this can't be used to
+    // probe a document's existence/content without access. This is what
+    // gets snapshotted into document_versions just below, since the
+    // UPDATE's own .select() only ever returns the NEW row -- the old
+    // content is gone the moment it runs unless captured beforehand.
+    let currentQuery = supabase.from('documents').select('title, prompt, content').eq('id', id);
+    currentQuery = orgActive ? currentQuery.eq('org_id', orgContext.orgId) : currentQuery.eq('user_id', user.id);
+    const { data: current, error: currentError } = await currentQuery.maybeSingle();
+
+    if (currentError) {
+      console.error('Supabase fetch error (pre-update snapshot read):', currentError);
+      return res.status(500).json({ error: 'Unable to update document' });
+    }
+    if (!current) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // No-op save (identical title/prompt/content) skips the snapshot --
+    // nothing was actually lost, so there's nothing worth keeping a
+    // history row for (e.g. clicking "Update Document" without changing
+    // anything).
+    const isNoOpSave = current.title === newTitle && current.prompt === prompt && current.content === content;
+
+    if (!isNoOpSave) {
+      // Not wrapped in a transaction with the update below (the Supabase
+      // JS client has no simple multi-statement transaction here) -- if
+      // this insert succeeds but the update after it fails, the result is
+      // one redundant version row that's identical to the still-unchanged
+      // current document, not lost or corrupted data. Accepted trade-off
+      // for a v1, same "basic, not atomic" reasoning already used for the
+      // rate limiter in _lib/rateLimit.js.
+      const { error: versionError } = await supabase.from('document_versions').insert({
+        document_id: id,
+        title: current.title,
+        prompt: current.prompt,
+        content: current.content,
+        // Always a real session user here, never an API key -- the
+        // api_key_read_only check above already rejects API-key callers
+        // before any write branch is reached.
+        edited_by: user.id
+      });
+      if (versionError) {
+        console.error('Failed to snapshot document version:', versionError);
+        return res.status(500).json({ error: 'Unable to update document' });
+      }
+    }
 
     // Org-active: any org member can update any org document, not just
     // its creator. Otherwise unchanged -- only the creator can.
     let updateQuery = supabase
       .from('documents')
       .update({
-        title: title || 'Generated Document',
+        title: newTitle,
         prompt,
         content
       })
