@@ -35,3 +35,18 @@ Tracked follow-ups that were deliberately deferred, so they don't quietly become
   (e.g. cap at the last N versions per document, prune oldest, or add
   rate limiting to the PUT route) if real usage patterns or abuse make
   this a real storage/cost concern.
+
+- **Free vs. Pro document-type enforcement: gates the label, not the
+  content** (known trade-off, accepted for v1 as of 2026-08-21).
+  `/api/generate`'s tier check only restricts the `documentType` value
+  (the type-selector UI's 6 known options) -- it doesn't inspect `prompt`,
+  a free-text field with no enforced relationship to `documentType`. A
+  Free-tier user can still get Pro-only-shaped output (e.g. a partnership
+  agreement) by describing it in `prompt` while leaving `documentType` at
+  its default. Closing that would require real content
+  analysis/classification of the prompt -- fragile, false-positive-prone,
+  or a second AI call just to classify intent -- disproportionate effort
+  against a determined workaround, versus the casual/UI-driven usage this
+  was actually meant to prevent (browsing/clicking a locked type in the
+  dashboard). Accepted as a conscious boundary, not revisited unless real
+  abuse patterns show this is actually being exploited at scale.
