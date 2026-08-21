@@ -1018,6 +1018,44 @@ button {
   border-color: rgba(184, 134, 11, 0.28);
 }
 
+/* Free-tier lock state for Pro/Firm-only document types -- still
+   clickable (triggers the upgrade prompt below the grid, see
+   activeDocButton in AppShell.jsx), just visually de-emphasized rather
+   than disabled outright, and never .active since selecting a locked
+   type never actually happens. */
+.doc-option.locked {
+  opacity: 0.55;
+}
+
+.doc-option.locked:hover {
+  background: var(--paper);
+  border-color: var(--border);
+}
+
+.doc-option-lock {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.doc-type-upgrade-prompt {
+  margin: -0.35rem 0 1.1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.doc-type-upgrade-prompt a {
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .dashboard-panel label,
 .client-panel label,
 .settings-panel label {

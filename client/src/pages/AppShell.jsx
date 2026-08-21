@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
-import { docTypes } from '../lib/docTypes';
+import { docTypes, isDocTypeUnlocked } from '../lib/docTypes';
 import { generateDocument } from '../lib/generateDocument';
 import { usePreferences } from '../context/PreferencesContext';
 import { languageOptions } from '../lib/translations';
@@ -28,6 +28,11 @@ function AppShell() {
   const [activeDoc, setActiveDoc] = useState(docTypes[0]);
   const [promptText, setPromptText] = useState(docTypes[0].prompt);
   const [generatedText, setGeneratedText] = useState('');
+  // Which locked (Pro/Firm-only) doc type the user most recently clicked
+  // on Free tier, if any -- drives the inline upgrade prompt below the
+  // type grid. null means no locked type has been clicked (or the prompt
+  // was dismissed by picking an unlocked type instead).
+  const [lockedDocTypeClicked, setLockedDocTypeClicked] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -432,6 +437,7 @@ function AppShell() {
         setTeamAddError('');
         setTeamAddSuccess(false);
         setTeamRemoveError(null);
+        setLockedDocTypeClicked(null);
       }
     });
 
@@ -520,7 +526,30 @@ function AppShell() {
     navigate(path);
   };
 
+  // Mirrors the exact orgActive || isActivePaidPlan(subscription) shape
+  // the backend uses in generate.js/documents.js -- a Firm team member
+  // has no subscription row of their own (only the org owner does), so
+  // this can't be a plain subscription check alone or every non-owner
+  // member would be incorrectly greyed out of Pro-only types too.
+  // teamOrg.active is populated identically for owner and member alike
+  // (see team.js), so no separate owner/member branch is needed here.
+  const hasFullDocTypeAccess = Boolean(
+    (subscription &&
+      (subscription.status === 'active' || subscription.status === 'trialing') &&
+      (subscription.plan === 'pro' || subscription.plan === 'firm')) ||
+      teamOrg?.active === true
+  );
+
   const activeDocButton = (doc) => {
+    if (!isDocTypeUnlocked(doc, hasFullDocTypeAccess)) {
+      // Locked type -- don't switch the active selection, just surface
+      // the upgrade prompt. The real restriction is server-side
+      // (generate.js rejects it regardless); this is purely UX so a Free
+      // user isn't left guessing why nothing happened.
+      setLockedDocTypeClicked(doc);
+      return;
+    }
+    setLockedDocTypeClicked(null);
     setActiveDoc(doc);
     setPromptText(doc.prompt);
     setGeneratedText('');
@@ -638,6 +667,7 @@ function AppShell() {
     setTeamAddError('');
     setTeamAddSuccess(false);
     setTeamRemoveError(null);
+    setLockedDocTypeClicked(null);
     navigate('/login');
   };
 
@@ -852,6 +882,15 @@ function AppShell() {
       }
       if (error.status === 429) {
         setGeneratedText(error.serverMessage || t('dashboard_generateRateLimited'));
+        return;
+      }
+      if (error.status === 403) {
+        // Defense in depth -- the UI already locks Pro-only types before
+        // this call is ever made, so reaching this branch means client
+        // state was stale (e.g. a plan just changed in another tab), not
+        // that the lock/prompt above was bypassed. Server response is the
+        // source of truth either way.
+        setGeneratedText(error.serverMessage || t('dashboard_docTypeLockedMessage'));
         return;
       }
       setGeneratedText('There was a problem generating the document.');
@@ -1753,16 +1792,30 @@ function AppShell() {
               <div className="dashboard-panel">
                 <h3>{t('dashboard_generateTitle')}</h3>
                 <div className="doc-types">
-                  {docTypes.map((doc) => (
-                    <button
-                      key={doc.id}
-                      className={`doc-option ${doc.id === activeDoc.id ? 'active' : ''}`}
-                      onClick={() => activeDocButton(doc)}
-                    >
-                      <span>{doc.title}</span>
-                    </button>
-                  ))}
+                  {docTypes.map((doc) => {
+                    const locked = !isDocTypeUnlocked(doc, hasFullDocTypeAccess);
+                    return (
+                      <button
+                        key={doc.id}
+                        className={`doc-option ${doc.id === activeDoc.id ? 'active' : ''} ${locked ? 'locked' : ''}`}
+                        onClick={() => activeDocButton(doc)}
+                        aria-pressed={doc.id === activeDoc.id}
+                      >
+                        <span>{doc.title}</span>
+                        {locked && <span className="doc-option-lock">{t('dashboard_docTypeLockedBadge')}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
+                {lockedDocTypeClicked && (
+                  <div className="doc-type-upgrade-prompt">
+                    <strong>{lockedDocTypeClicked.title}</strong> {t('dashboard_docTypeLockedMessage')}{' '}
+                    {/* Plain <a>, not a react-router Link -- #pricing lives on the
+                        marketing homepage outside AppShell's routes (same reasoning
+                        as the Billing page's "Change plan" link just above it). */}
+                    <a href="/#pricing">{t('dashboard_docTypeUpgradeLink')}</a>
+                  </div>
+                )}
                 <label>{t('dashboard_promptLabel')}</label>
                 <textarea className="dashboard-textarea" value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={7} />
                 <button className="btn-primary generate-action" onClick={generateDoc} disabled={loading}>

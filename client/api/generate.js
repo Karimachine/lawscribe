@@ -2,6 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getSupabaseAdmin } from './_lib/supabaseAdmin.js';
 import { checkAndIncrementRateLimit, getClientIp } from './_lib/rateLimit.js';
 import { resolveRequestIdentity } from '../lib/apiKeyAuth.js';
+import { docTypes, isDocTypeUnlocked } from '../lib/docTypes.js';
+import { getOrgAccessContext } from './_lib/org.js';
+import { isActivePaidPlan } from './_lib/plan.js';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
@@ -66,22 +69,66 @@ export default async function handler(req, res) {
   }
   const user = auth.user;
 
-  // Org/plan status is deliberately NOT checked here. Unlike
-  // documents.js/clients.js, this route never reads or writes a row that
-  // has an org_id/user_id to scope -- it's a stateless Claude call. The
-  // free-tier document *save* limit and org-shared *access* both already
-  // apply correctly at the one place they actually mean something --
-  // POST /api/documents -- so duplicating that check here would gate a
-  // concept (org-shared access) that doesn't apply to this endpoint.
-  // What generation actually needed was traceability + abuse throttling,
-  // which the auth + rate limit above now provide.
+  // Org/plan status is otherwise deliberately NOT checked here beyond the
+  // doc-type gate just below. Unlike documents.js/clients.js, this route
+  // never reads or writes a row that has an org_id/user_id to scope --
+  // it's a stateless Claude call. The free-tier document *save* limit and
+  // org-shared *access* both already apply correctly at the one place
+  // they actually mean something -- POST /api/documents -- so duplicating
+  // that check here would gate a concept (org-shared access) that doesn't
+  // apply to this endpoint.
   //
-  // Note for whoever builds the planned Free vs Pro document-type
-  // restriction: `user` above is resolved identically whether the caller
-  // used a session or an API key (see resolveRequestIdentity), so a
-  // documentType/plan check added here will automatically cover both --
-  // no separate API-key case to remember.
-  //
+  // `user` above is resolved identically whether the caller used a
+  // session or an API key (see resolveRequestIdentity), so the doc-type
+  // check below automatically covers both -- no separate API-key case to
+  // remember, closing the gap the API-key work flagged (a key having no
+  // plan-tier restriction to inherit from).
+  const matchedDocType = documentType ? docTypes.find((type) => type.title === documentType) : null;
+  if (matchedDocType?.tier === 'pro') {
+    // Only resolved when it's actually needed (a Pro-only type was
+    // requested) -- the common case (free types, which is most demo/free
+    // traffic) skips these lookups entirely. Mirrors the exact
+    // orgActive || isActivePaidPlan(subscription) shape documents.js's
+    // free-tier document-count check already uses, so a Firm team member
+    // (who has no subscription row of their own -- only the org owner
+    // does) gets full access here too, not incorrectly treated as
+    // free-tier. An anonymous caller (user === null) always fails this --
+    // there's no subscription to look up for someone with no account.
+    let hasFullAccess = false;
+    if (user) {
+      const orgContext = await getOrgAccessContext(supabase, user.id);
+      hasFullAccess = orgContext?.active === true;
+
+      if (!hasFullAccess) {
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from('subscriptions')
+          .select('plan, status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (subscriptionError) {
+          console.error('Failed to check subscription for document-type gate:', subscriptionError);
+          return res.status(500).json({ error: 'Unable to generate document' });
+        }
+
+        hasFullAccess = isActivePaidPlan(subscription);
+      }
+    }
+
+    if (!isDocTypeUnlocked(matchedDocType, hasFullAccess)) {
+      return res.status(403).json({
+        error: 'doc_type_requires_upgrade',
+        message: `${matchedDocType.title} is a Pro/Firm document type. Upgrade to unlock it.`,
+        upgradeUrl: '/#pricing'
+      });
+    }
+  }
+  // A documentType that doesn't match any known title (including no
+  // documentType at all, which falls back to the generic "legal" prompt
+  // below) is intentionally left ungated -- see the caveat in the code
+  // comment further down by the actual Claude call about why this label
+  // was never a hard content boundary to begin with.
+
   // API keys get their own identity prefix (not `user:<id>`) so a caller
   // using both the app and a key don't share/starve one bucket, even
   // though the two currently carry the same numeric limit.
@@ -100,6 +147,16 @@ export default async function handler(req, res) {
     });
   }
 
+  // Known limitation, not something this ticket set out to fix: the
+  // doc-type gate above only restricts the labeled `documentType` value,
+  // not the actual content Claude produces -- that's driven by `prompt`,
+  // a free-text field with no relationship to `documentType` enforced
+  // here or anywhere else. A Free-tier caller can still get
+  // partnership-agreement-shaped output by simply asking for one in
+  // `prompt` while leaving documentType at its default. Closing that
+  // would mean content-inspecting every generation, a materially bigger
+  // (and fuzzier) feature than gating the type-selector UI's 6 known
+  // options, which is what was actually asked for here.
   try {
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
